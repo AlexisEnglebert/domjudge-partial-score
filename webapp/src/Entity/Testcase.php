@@ -116,6 +116,11 @@ class Testcase
     #[Serializer\Exclude]
     private ?Problem $problem = null;
 
+
+    #[ORM\Column(nullable: true, options: ['comment' => 'Test Group of the test-case'])]
+    #[Serializer\Exclude]
+    private ?string $testgroup = null;
+
     public function __construct()
     {
         $this->judging_runs  = new ArrayCollection();
@@ -285,6 +290,17 @@ class Testcase
     public function getProblem(): ?Problem
     {
         return $this->problem;
+    }
+
+    public function SetTestgroup(?string $testgroup = null): Testcase
+    {
+        $this->testgroup = $testgroup;
+        return $this;
+    }
+
+    public function getTestgroup(): ?string
+    {
+        return $this->testgroup;
     }
 
     public function addExternalRun(ExternalRun $externalRun): Testcase
