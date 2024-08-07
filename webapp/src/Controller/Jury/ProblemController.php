@@ -14,6 +14,7 @@ use App\Entity\Submission;
 use App\Entity\SubmissionFile;
 use App\Entity\Testcase;
 use App\Entity\TestcaseContent;
+use App\Entity\TestGroup;
 use App\Form\Type\ProblemAttachmentType;
 use App\Form\Type\ProblemType;
 use App\Form\Type\ProblemUploadType;
@@ -771,10 +772,22 @@ class ProblemController extends BaseController
                 . join($lockedContests)
                 . ', disallowing editing.');
         }
+
+        // Add testgroup in data
+        //TODO HMMMMM COMMENT RECONNAITRE TOUT ÇA ....
+        $testGroups = $this->em->createQueryBuilder()
+            ->from(TestGroup::class, 'tg')
+            ->select('tg')
+            ->andWhere('tg.problem = :problem')
+            ->setParameter('problem', $problem)
+            ->getQuery()
+            ->getResult();
+
         $data = [
             'problem' => $problem,
             'testcases' => $testcases,
             'testcaseData' => $testcaseData,
+            'testGroups' => $testGroups,
             'extensionMapping' => Testcase::EXTENSION_MAPPING,
             'allowEdit' => $this->isGranted('ROLE_ADMIN') && empty($lockedContests),
         ];

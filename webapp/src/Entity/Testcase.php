@@ -119,7 +119,7 @@ class Testcase
 
     #[ORM\Column(nullable: true, options: ['comment' => 'Test Group of the test-case'])]
     #[Serializer\Exclude]
-    private ?string $testgroup = null;
+    private ?int $testgroupid = null;
 
     public function __construct()
     {
@@ -292,15 +292,15 @@ class Testcase
         return $this->problem;
     }
 
-    public function SetTestgroup(?string $testgroup = null): Testcase
+    public function SetTestgroupId(?int $testgroup = null): Testcase
     {
-        $this->testgroup = $testgroup;
+        $this->testgroupid = $testgroup;
         return $this;
     }
 
-    public function getTestgroup(): ?string
+    public function getTestgroupId(): ?int
     {
-        return $this->testgroup;
+        return $this->testgroupid;
     }
 
     public function addExternalRun(ExternalRun $externalRun): Testcase

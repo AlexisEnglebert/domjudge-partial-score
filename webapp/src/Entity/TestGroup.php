@@ -12,37 +12,43 @@ use JMS\Serializer\Annotation as Serializer;
     'charset' => 'utf8mb4',     
     'comment' => 'Stores testgroup per problem',
 ])]
+
+//TODO ADD A RANK TO THE TEST GROUPS ....
 class TestGroup 
-        {
+{
     #[ORM\Column(nullable: false, options: ['comment' => 'testgroup name'])]
     #[Serializer\Exclude]
     private ?string $name;
 
     #[ORM\Column(type: 'blob', nullable: true, options: ['comment' => 'Description of this testgroup'])]
     #[Serializer\Exclude]
-    private ?string $description;
+    private $description;
 
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column(options: ['comment' => 'Testgroup ID', 'unsigned' => true])]
-    private ?int $id;
+    private ?int $testGroupId;
 
-    #[ORM\OneToMany(mappedBy: 'testgroup', targetEntity: Testcase::class)]
-    #[Serializer\Exclude]
-    private Collection $testcases;
-
-    #[ORM\Column(options: ['comment' => 'testgroup score'])]
+    #[ORM\Column(nullable: true, options: ['comment' => 'testgroup score'])]
     private int $score; // HMM I don't really like this :(
+
+    #[ORM\Column(options: ['comment' => 'testgroup aggregation'])]
+	private ?string $aggregation;
     
+	#[ORM\ManyToOne(inversedBy: 'test_group')]
+    #[ORM\JoinColumn(name: 'probid', referencedColumnName: 'probid', onDelete: 'CASCADE')]
+    #[Serializer\Exclude]
+    private ?Problem $problem = null;
+
     public function __construct() 
     {
         $this->testcases = new ArrayCollection();
     }
     
 
-    public function getId(): ?int
+    public function getTestGroupId(): ?int
     {
-        return $this->id;
+        return $this->testGroupId;
     }
 
     public function getName(): ?string
@@ -55,18 +61,43 @@ class TestGroup
         $this->name = $name;
     }
 
+	//TODO
     public function getDescription(): ?string
     {
         return $this->description;
     }
 
-    public function setDescription(string $description): void
+    public function setDescription($description): void
     {
         $this->description = $description;
     }
 
-    public function getTestcases(): Collection
-    {
-        return $this->testcases;
-    }
+	public function getScore() : int
+	{
+		return $this->score;
+	}
+
+	public function setScore(int $score): void
+	{
+		$this->score = $score;
+	}
+
+	public function getAggregation(): ?string
+	{
+		return $this->aggregation;
+	}
+	public function setAggregation(string $aggregation): void
+	{
+		$this->aggregation = $aggregation;
+	}
+
+	public function getProblem() : ?Problem
+	{
+		return $this->problem;
+	}
+
+	public function setProblem(Problem $problem): void
+	{
+		$this->problem = $problem;
+	}
 }

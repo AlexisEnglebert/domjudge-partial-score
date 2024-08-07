@@ -12,4 +12,5 @@ return [
     'wrong-answer'       => 'WA',
     'no-output'          => 'NO',
     'correct'            => 'AC',
+    'partially-accepted' => 'PA',
 ];
