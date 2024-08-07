@@ -2,44 +2,9 @@
 
 DOMjudge
 --------
-[![pipeline status](https://gitlab.com/DOMjudge/domjudge/badges/main/pipeline.svg)](https://gitlab.com/DOMjudge/domjudge/commits/main)
-[![Coverity Scan Status](https://img.shields.io/coverity/scan/671.svg)](https://scan.coverity.com/projects/domjudge)
-[![CodeQL alerts](https://github.com/DOMjudge/domjudge/actions/workflows/codeql-analysis.yml/badge.svg?branch=main&event=push)](https://github.com/DOMjudge/domjudge/actions/workflows/codeql-analysis.yml)
+This repository is does not aim to handle **partial-scoring and ICPC scoring style**.
 
-This is the Programming Contest Jury System "DOMjudge" version 8.4.0DEV
-
-DOMjudge is a system for running a programming contest, like the
-ICPC regional and world championship programming contests .
-
-
-Documentation
--------------
-
-For more information on installation and requirements see the
-documentation under the doc/manual directory. There is an HTML
-version of the documentation available, prebuilt from reStructuredText
-sources.
-
-There's also team documentation available, prebuilt in PDF format from
-reStructuredText sources, but it contains default/example settings.
-To include the correct settings for your local environment, DOMjudge
-has to be properly configured first, as parts of the configuration are
-used in it (e.g. the URL to the team interface of DOMjudge). For more
-information, see the documentation.
-
-All documentation is also available online at the DOMjudge homepage:
-	https://www.domjudge.org/documentation
-Please note that this documentation is from the latest stable
-release and thus might not apply to your version.
-
-A fresh copy of the repository source tree must first be bootstrapped,
-generating the configure script and documentation. This can be done
-by running 'make dist', see the online documentation, section
-"Developer information" for more details.
-
-There is a wiki which collects other pieces of information about
-specific configurations or integrations:
-https://github.com/DOMjudge/domjudge/wiki
+This is not planned at the moment.
 
 Copyright & Licensing
 ---------------------
