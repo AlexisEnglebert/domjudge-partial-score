@@ -778,11 +778,26 @@ class ProblemController extends BaseController
             ->getQuery()
             ->getResult();
 
+        $tgTestCases = [];
+        foreach ($testGroups as $group) {
+            $td = $this->em->createQueryBuilder()
+            ->from(Testcase::class, 'tc', 'tc.ranknumber')
+            ->join('tc.content', 'content')
+            ->select('tc', 'LENGTH(content.input) AS input_size', 'LENGTH(content.output) AS output_size',
+                     'LENGTH(content.image) AS image_size', 'tc.image_type')
+            ->andWhere('tc.testgroupid = :testgroupid')
+            ->setParameter('testgroupid', $group->getTestGroupId())
+            ->getQuery()
+            ->getResult();
+
+            $tgTestCases[$group->getTestGroupId()] = array_map(fn($data) => $data[0], $td);
+        }
+
         $data = [
             'problem' => $problem,
             'testcases' => $testcases,
             'testcaseData' => $testcaseData,
-            'testGroups' => $testGroups,
+            'tgTestCases' => $tgTestCases,
             'extensionMapping' => Testcase::EXTENSION_MAPPING,
             'allowEdit' => $this->isGranted('ROLE_ADMIN') && empty($lockedContests),
         ];
