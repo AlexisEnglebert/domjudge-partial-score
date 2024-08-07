@@ -5,7 +5,7 @@ namespace App\Service;
 use App\Entity\Contest;
 use App\Entity\ContestProblem;
 use App\Entity\Executable;
-use App\Entity\Language;    
+use App\Entity\Language;
 use App\Entity\Problem;
 use App\Entity\ProblemAttachment;
 use App\Entity\ProblemAttachmentContent;
@@ -414,7 +414,7 @@ class ImportProblemService
                             }
                             $isAggregationSet = isset($valueData['grading']['aggregation']);
                             if($isAggregationSet) {
-                                //TODO CHECK IF IS IN VALID AGGREGATIONS                
+                                //TODO CHECK IF IS IN VALID AGGREGATIONS
                                 $groupFiles[$testGroupLabel]->setAggregation(trim($valueData['grading']['aggregation']));
                             }
 
@@ -424,8 +424,8 @@ class ImportProblemService
                             }
 
                             $this->em->persist($groupFiles[$testGroupLabel]);
-                            $this->em->flush();                     
-                        }    
+                            $this->em->flush();
+                        }
                     }
                 }
             }
@@ -508,7 +508,7 @@ class ImportProblemService
                     ->setMd5sumInput($md5in)
                     ->setMd5sumOutput($md5out)
                     ->setOrigInputFilename($dataFile);
-                
+
                 //Add the testcase to the corresponding testGroup
                 $testcaseTestgroup = basename(dirname($baseFileName));
                 $isTestGroupSet = isset($groupFiles[$testcaseTestgroup]);
