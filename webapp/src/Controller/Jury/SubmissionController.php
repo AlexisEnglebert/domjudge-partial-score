@@ -378,6 +378,9 @@ class SubmissionController extends BaseController
                 ->getScalarResult();
 
             $cnt = 0;
+            if (count($judgingRunTestcaseIdsInOrder) !== count($runResults)) {
+                $sameTestcaseIds = false;
+            }
             foreach ($runResults as $runResult) {
                 /** @var Testcase $testcase */
                 $testcase = $runResult[0];
@@ -532,6 +535,7 @@ class SubmissionController extends BaseController
             'combinedRunCompare' => $submission->getProblem()->getCombinedRunCompare(),
             'requestedOutputCount' => $requestedOutputCount,
             'version_warnings' => [],
+            'isMultiPassProblem' => $submission->getProblem()->isMultipassProblem(),
         ];
 
         if ($selectedJudging === null) {
@@ -747,6 +751,10 @@ class SubmissionController extends BaseController
         return Utils::streamAsBinaryFile($outputRun, $filename);
     }
 
+    private function allowEdit(): bool {
+        return $this->dj->getUser()->getTeam() && $this->dj->checkrole('team');
+    }
+
     /**
      * @throws NonUniqueResultException
      */
@@ -864,13 +872,14 @@ class SubmissionController extends BaseController
             'originalSubmission' => $originalSubmission,
             'originalFiles' => $originalFiles,
             'originalFileStats' => $originalFileStats,
+            'allowEdit' => $this->allowEdit(),
         ]);
     }
 
     #[Route(path: '/{submission}/edit-source', name: 'jury_submission_edit_source')]
     public function editSourceAction(Request $request, Submission $submission, #[MapQueryParameter] ?int $rank = null): Response
     {
-        if (!$this->dj->getUser()->getTeam() || !$this->dj->checkrole('team')) {
+        if (!$this->allowEdit()) {
             $this->addFlash('danger', 'You cannot re-submit code without being a team.');
             return $this->redirectToLocalReferrer($this->router, $request, $this->generateUrl(
                 'jury_submission',
@@ -1252,7 +1261,9 @@ class SubmissionController extends BaseController
         $observedConfig = $this->dj->jsonDecode($observedConfigString);
         $errors = [];
         foreach (array_keys($expectedConfig) as $k) {
-            if ($expectedConfig[$k] != $observedConfig[$k]) {
+            if (!array_key_exists($k, $observedConfig)) {
+                $errors[] = '- ' . preg_replace('/_/', ' ', $k) . ': missing';
+            } elseif ($expectedConfig[$k] != $observedConfig[$k]) {
                 if ($k === 'hash') {
                     $errors[] = '- script has changed';
                 } elseif ($k === 'entry_point') {
@@ -1262,6 +1273,11 @@ class SubmissionController extends BaseController
                     $errors[] = '- ' . preg_replace('/_/', ' ', $k) . ': '
                         . $this->dj->jsonEncode($observedConfig[$k]) . ' → ' . $this->dj->jsonEncode($expectedConfig[$k]);
                 }
+            }
+        }
+        foreach (array_keys($observedConfig) as $k) {
+            if (!array_key_exists($k, $expectedConfig)) {
+                $errors[] = '- ' . preg_replace('/_/', ' ', $k) . ': unexpected';
             }
         }
         if (!empty($errors)) {

@@ -268,7 +268,7 @@ class ImportExportService
             $messages = [];
             /** @var ConstraintViolationInterface $error */
             foreach ($errors as $error) {
-                $messages[] = sprintf('%s: %s', $error->getPropertyPath(), $error->getMessage());
+                $messages[] = sprintf('  • `%s`: %s', $error->getPropertyPath(), $error->getMessage());
             }
 
             $errorMessage = sprintf("Contest has errors:\n\n%s", implode("\n", $messages));
@@ -510,6 +510,10 @@ class ImportExportService
         $data             = [];
         $lowestMedalPoints = 0;
 
+        // For every team that we skip because it is not in a medal category, we need to include one
+        // additional rank. So keep track of the number of skipped teams
+        $skippedTeams     = 0;
+
         foreach ($scoreboard->getScores() as $teamScore) {
             if ($teamScore->team->getCategory()->getSortorder() !== $sortOrder) {
                 continue;
@@ -522,13 +526,35 @@ class ImportExportService
 
             $rank      = $teamScore->rank;
             $numPoints = $teamScore->numPoints;
-            if ($rank <= $contest->getGoldMedals()) {
+            $skip      = false;
+
+            if (!$contest->getMedalCategories()->contains($teamScore->team->getCategory())) {
+                $skip = true;
+                $skippedTeams++;
+            }
+
+            if ($numPoints === 0) {
+                // Teams with 0 points won't get a medal, a rank or an honor.
+                // They will always get an honorable mention.
+                $data[] = new ResultRow(
+                    $teamScore->team->getIcpcId(),
+                    null,
+                    'Honorable',
+                    $teamScore->numPoints,
+                    $teamScore->totalTime,
+                    $maxTime,
+                    null
+                );
+                continue;
+            }
+
+            if (!$skip && $rank - $skippedTeams <= $contest->getGoldMedals()) {
                 $awardString = 'Gold Medal';
                 $lowestMedalPoints = $teamScore->numPoints;
-            } elseif ($rank <= $contest->getGoldMedals() + $contest->getSilverMedals()) {
+            } elseif (!$skip && $rank - $skippedTeams <= $contest->getGoldMedals() + $contest->getSilverMedals()) {
                 $awardString = 'Silver Medal';
                 $lowestMedalPoints = $teamScore->numPoints;
-            } elseif ($rank <= $contest->getGoldMedals() + $contest->getSilverMedals() + $contest->getBronzeMedals() + $contest->getB()) {
+            } elseif (!$skip && $rank - $skippedTeams <= $contest->getGoldMedals() + $contest->getSilverMedals() + $contest->getBronzeMedals() + $contest->getB()) {
                 $awardString = 'Bronze Medal';
                 $lowestMedalPoints = $teamScore->numPoints;
             } elseif ($numPoints >= $median) {
@@ -540,7 +566,9 @@ class ImportExportService
                     $rank = $ranks[$numPoints];
                 }
                 if ($honors) {
-                    if ($numPoints === $lowestMedalPoints) {
+                    if ($numPoints === $lowestMedalPoints
+                        || $rank - $skippedTeams <= $contest->getGoldMedals() + $contest->getSilverMedals() + $contest->getBronzeMedals() + $contest->getB()) {
+                        // Some teams out of the medal categories but ranked higher than bronze medallists may get more points.
                         $awardString = 'Highest Honors';
                     } elseif ($numPoints === $lowestMedalPoints - 1) {
                         $awardString = 'High Honors';
@@ -763,10 +791,13 @@ class ImportExportService
                 $messages = [];
                 /** @var ConstraintViolationInterface $error */
                 foreach ($errors as $error) {
-                    $messages[] = sprintf('%s: %s', $error->getPropertyPath(), $error->getMessage());
+                    $messages[] = sprintf('  • `%s`: %s', $error->getPropertyPath(), $error->getMessage());
                 }
 
-                $message .= sprintf("Group at index %d has errors:\n\n%s\n", $index, implode("\n", $messages));
+                $message .= sprintf("Group at index %d (%s) has errors:\n%s\n\n",
+                    $index,
+                    json_encode($groupItem),
+                    implode("\n", $messages));
                 $anyErrors = true;
             } else {
                 $allCategories[] = $teamCategory;
@@ -782,7 +813,7 @@ class ImportExportService
         }
 
         if ($anyErrors) {
-            return 0;
+            return -1;
         }
 
         foreach ($allCategories as $category) {
@@ -870,10 +901,13 @@ class ImportExportService
                 $messages = [];
                 /** @var ConstraintViolationInterface $error */
                 foreach ($errors as $error) {
-                    $messages[] = sprintf('%s: %s', $error->getPropertyPath(), $error->getMessage());
+                    $messages[] = sprintf('  • `%s`: %s', $error->getPropertyPath(), $error->getMessage());
                 }
 
-                $message .= sprintf("Organization at index %d has errors:\n\n%s\n", $index, implode("\n", $messages));
+                $message .= sprintf("Organization at index %d (%s) has errors:\n%s\n\n",
+                    $index,
+                    json_encode($organizationItem),
+                    implode("\n", $messages));
                 $anyErrors = true;
             } else {
                 $allOrganizations[] = $teamAffiliation;
@@ -889,7 +923,7 @@ class ImportExportService
         }
 
         if ($anyErrors) {
-            return 0;
+            return -1;
         }
 
         foreach ($allOrganizations as $organization) {
@@ -984,7 +1018,7 @@ class ImportExportService
                     'label' => $team['label'] ?? null,
                     'categoryid' => $team['group_ids'][0] ?? null,
                     'name' => $team['name'] ?? '',
-                    'display_name' => $team['display_name'] ?? '',
+                    'display_name' => $team['display_name'] ?? null,
                     'publicdescription' => $team['public_description'] ?? $team['members'] ?? '',
                     'location' => $team['location']['description'] ?? null,
                 ],
@@ -1093,7 +1127,9 @@ class ImportExportService
      */
     protected function importTeamData(array $teamData, ?string &$message, ?array &$saved = null): int
     {
+        /** @var TeamAffiliation[] $createdAffiliations */
         $createdAffiliations = [];
+        /** @var TeamCategory[] $createdCategories */
         $createdCategories   = [];
         $createdTeams        = [];
         $updatedTeams        = [];
@@ -1107,6 +1143,14 @@ class ImportExportService
                 // First look up if the affiliation already exists.
                 $teamAffiliation = $this->em->getRepository(TeamAffiliation::class)->findOneBy(['shortname' => $teamItem['team_affiliation']['shortname']]);
                 if (!$teamAffiliation) {
+                    foreach ($createdAffiliations as $createdAffiliation) {
+                        if ($createdAffiliation->getShortname() === $teamItem['team_affiliation']['shortname']) {
+                            $teamAffiliation = $createdAffiliation;
+                            break;
+                        }
+                    }
+                }
+                if (!$teamAffiliation) {
                     $teamAffiliation  = new TeamAffiliation();
                     $propertyAccessor = PropertyAccess::createPropertyAccessor();
                     foreach ($teamItem['team_affiliation'] as $field => $value) {
@@ -1118,10 +1162,13 @@ class ImportExportService
                         $messages = [];
                         /** @var ConstraintViolationInterface $error */
                         foreach ($errors as $error) {
-                            $messages[] = sprintf('%s: %s', $error->getPropertyPath(), $error->getMessage());
+                            $messages[] = sprintf('  • `%s`: %s', $error->getPropertyPath(), $error->getMessage());
                         }
 
-                        $message .= sprintf("Organization for team at index %d has errors:\n\n%s\n", $index, implode("\n", $messages));
+                        $message .= sprintf("Organization for team at index %d (%s) has errors:\n%s\n\n",
+                            $index,
+                            json_encode($teamItem),
+                            implode("\n", $messages));
                         $anyErrors = true;
                     } else {
                         $createdAffiliations[] = $teamAffiliation;
@@ -1129,6 +1176,15 @@ class ImportExportService
                 }
             } elseif (!empty($teamItem['team_affiliation']['externalid'])) {
                 $teamAffiliation = $this->em->getRepository(TeamAffiliation::class)->findOneBy(['externalid' => $teamItem['team_affiliation']['externalid']]);
+                if (!$teamAffiliation) {
+                    foreach ($createdAffiliations as $createdAffiliation) {
+                        if ($createdAffiliation->getExternalid() === $teamItem['team_affiliation']['externalid']) {
+                            $teamAffiliation = $createdAffiliation;
+                            break;
+                        }
+                    }
+                }
+
                 if (!$teamAffiliation) {
                     $teamAffiliation = new TeamAffiliation();
                     $teamAffiliation
@@ -1141,10 +1197,13 @@ class ImportExportService
                         $messages = [];
                         /** @var ConstraintViolationInterface $error */
                         foreach ($errors as $error) {
-                            $messages[] = sprintf('%s: %s', $error->getPropertyPath(), $error->getMessage());
+                            $messages[] = sprintf('  • `%s`: %s', $error->getPropertyPath(), $error->getMessage());
                         }
 
-                        $message .= sprintf("Organization for team at index %d has errors:\n\n%s\n", $index, implode("\n", $messages));
+                        $message .= sprintf("Organization for team at index %d (%s) has errors:\n%s\n\n",
+                            $index,
+                            json_encode($teamItem),
+                            implode("\n", $messages));
                         $anyErrors = true;
                     } else {
                         $createdAffiliations[] = $teamAffiliation;
@@ -1157,6 +1216,14 @@ class ImportExportService
             if (!empty($teamItem['team']['categoryid'])) {
                 $teamCategory = $this->em->getRepository(TeamCategory::class)->findOneBy(['externalid' => $teamItem['team']['categoryid']]);
                 if (!$teamCategory) {
+                    foreach ($createdCategories as $createdCategory) {
+                        if ($createdCategory->getExternalid() === $teamItem['team']['categoryid']) {
+                            $teamCategory = $createdCategory;
+                            break;
+                        }
+                    }
+                }
+                if (!$teamCategory) {
                     $teamCategory = new TeamCategory();
                     $teamCategory
                         ->setExternalid($teamItem['team']['categoryid'])
@@ -1167,10 +1234,13 @@ class ImportExportService
                         $messages = [];
                         /** @var ConstraintViolationInterface $error */
                         foreach ($errors as $error) {
-                            $messages[] = sprintf('%s: %s', $error->getPropertyPath(), $error->getMessage());
+                            $messages[] = sprintf('  • `%s`: %s', $error->getPropertyPath(), $error->getMessage());
                         }
 
-                        $message .= sprintf("Group for team at index %d has errors:\n\n%s\n", $index, implode("\n", $messages));
+                        $message .= sprintf("Group for team at index %d (%s) has errors:\n%s\n\n",
+                            $index,
+                            json_encode($teamItem),
+                            implode("\n", $messages));
                         $anyErrors = true;
                     } else {
                         $createdCategories[] = $teamCategory;
@@ -1216,10 +1286,13 @@ class ImportExportService
                 $messages = [];
                 /** @var ConstraintViolationInterface $error */
                 foreach ($errors as $error) {
-                    $messages[] = sprintf('%s: %s', $error->getPropertyPath(), $error->getMessage());
+                    $messages[] = sprintf('  • `%s`: %s', $error->getPropertyPath(), $error->getMessage());
                 }
 
-                $message .= sprintf("Team at index %d has errors:\n\n%s\n", $index, implode("\n", $messages));
+                $message .= sprintf("Team at index %d (%s) has errors:\n%s\n\n",
+                    $index,
+                    json_encode($teamItem),
+                    implode("\n", $messages));
                 $anyErrors = true;
             } else {
                 $allTeams[] = $team;
@@ -1237,7 +1310,7 @@ class ImportExportService
         }
 
         if ($anyErrors) {
-            return 0;
+            return -1;
         }
 
         foreach ($createdAffiliations as $affiliation) {
@@ -1320,10 +1393,13 @@ class ImportExportService
                     $messages = [];
                     /** @var ConstraintViolationInterface $error */
                     foreach ($errors as $error) {
-                        $messages[] = sprintf('%s: %s', $error->getPropertyPath(), $error->getMessage());
+                        $messages[] = sprintf('  • `%s`: %s', $error->getPropertyPath(), $error->getMessage());
                     }
 
-                    $message .= sprintf("Team for user at index %d has errors:\n\n%s\n", $index, implode("\n", $messages));
+                    $message .= sprintf("Team for user at index %d (%s) has errors:\n%s\n\n",
+                        $index,
+                        json_encode($accountItem),
+                        implode("\n", $messages));
                     $anyErrors = true;
                 } else {
                     $newTeams[] = [
@@ -1369,10 +1445,13 @@ class ImportExportService
                 $messages = [];
                 /** @var ConstraintViolationInterface $error */
                 foreach ($errors as $error) {
-                    $messages[] = sprintf('%s: %s', $error->getPropertyPath(), $error->getMessage());
+                    $messages[] = sprintf('  • `%s`: %s', $error->getPropertyPath(), $error->getMessage());
                 }
 
-                $message .= sprintf("User at index %d has errors:\n\n%s\n", $index, implode("\n", $messages));
+                $message .= sprintf("User at index %d (%s) has errors:\n%s\n\n",
+                    $index,
+                    json_encode($accountItem),
+                    implode("\n", $messages));
                 $anyErrors = true;
             } else {
                 $allUsers[] = $user;
@@ -1384,7 +1463,7 @@ class ImportExportService
         }
 
         if ($anyErrors) {
-            return 0;
+            return -1;
         }
 
         foreach ($allUsers as $user) {

@@ -13,15 +13,15 @@ use App\Service\EventLogService;
 use App\Service\RejudgingService;
 use App\Utils\Utils;
 use Doctrine\ORM\EntityManagerInterface;
-use Symfony\Component\HttpFoundation\RequestStack;
-use Symfony\Component\HttpKernel\KernelInterface;
-use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Component\HttpKernel\Profiler\Profiler;
 use Symfony\Component\PropertyAccess\PropertyAccess;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[IsGranted('ROLE_JURY')]
 #[Route(path: '/jury/internal-errors')]
@@ -186,6 +186,7 @@ class InternalErrorController extends BaseController
                             JudgeTask::PRIORITY_DEFAULT,
                             $affectedJudgings->getValues(),
                             false,
+                            0,
                             0,
                             null,
                             $skipped,

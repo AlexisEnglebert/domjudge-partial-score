@@ -881,7 +881,10 @@ class DOMJudgeService
 
         /** @var ContestProblem $problem */
         foreach ($contest->getProblems() as $problem) {
-            $this->addSamplesToZip($zip, $problem, $problem->getShortname());
+            // We don't include the samples for interactive problems.
+            if (!$problem->getProblem()->getCombinedRunCompare()) {
+                $this->addSamplesToZip($zip, $problem, $problem->getShortname());
+            }
 
             if ($problem->getProblem()->getProblemstatementType()) {
                 $filename    = sprintf('%s/statement.%s', $problem->getShortname(), $problem->getProblem()->getProblemstatementType());
@@ -892,6 +895,14 @@ class DOMJudgeService
             foreach ($problem->getProblem()->getAttachments() as $attachment) {
                 $filename = sprintf('%s/attachments/%s', $problem->getShortname(), $attachment->getName());
                 $zip->addFromString($filename, $attachment->getContent()->getContent());
+                if ($attachment->getContent()->isExecutable()) {
+                    // 100755 = regular file, executable
+                    $zip->setExternalAttributesName(
+                        $filename,
+                        ZipArchive::OPSYS_UNIX,
+                        octdec('100755') << 16
+                    );
+                }
             }
         }
 
@@ -1157,7 +1168,7 @@ class DOMJudgeService
         }
     }
 
-    public function maybeCreateJudgeTasks(Judging $judging, int $priority = JudgeTask::PRIORITY_DEFAULT, bool $manualRequest = false): void
+    public function maybeCreateJudgeTasks(Judging $judging, int $priority = JudgeTask::PRIORITY_DEFAULT, bool $manualRequest = false, int $overshoot = 0): void
     {
         $submission = $judging->getSubmission();
         $problem    = $submission->getContestProblem();
@@ -1170,7 +1181,7 @@ class DOMJudgeService
             return;
         }
 
-        $this->actuallyCreateJudgetasks($priority, $judging);
+        $this->actuallyCreateJudgetasks($priority, $judging, $overshoot);
 
         $team = $submission->getTeam();
         $result = $this->em->createQueryBuilder()
@@ -1202,14 +1213,17 @@ class DOMJudgeService
         // - the new submission would get X+5+60 (since there's only one of their submissions still to be worked on),
         //   but we want to judge submissions of this team in order, so we take the current max (X+120) and add 1.
         $teamPriority = (int)(max($result['max']+1, $submission->getSubmittime() + 60*$result['count']));
-        $queueTask = new QueueTask();
-        $queueTask->setJudging($judging)
-            ->setPriority($priority)
-            ->setTeam($team)
-            ->setTeamPriority($teamPriority)
-            ->setStartTime(null);
-        $this->em->persist($queueTask);
-        $this->em->flush();
+        // Use a direct query to speed things up
+        $this->em->getConnection()->executeQuery(
+            'INSERT INTO queuetask (judgingid, priority, teamid, teampriority, starttime)
+             VALUES (:judgingid, :priority, :teamid, :teampriority, null)',
+            [
+                'judgingid' => $judging->getJudgingid(),
+                'priority' => $priority,
+                'teamid' => $team->getTeamid(),
+                'teampriority' => $teamPriority,
+            ]
+        );
     }
 
     public function getImmutableCompareExecutable(ContestProblem $problem): ImmutableExecutable
@@ -1409,7 +1423,7 @@ class DOMJudgeService
         return $res;
     }
 
-    public function getRunConfig(ContestProblem $problem, Submission $submission): string
+    public function getRunConfig(ContestProblem $problem, Submission $submission, int $overshoot = 0): string
     {
         $memoryLimit = $problem->getProblem()->getMemlimit();
         $outputLimit = $problem->getProblem()->getOutputlimit();
@@ -1428,7 +1442,9 @@ class DOMJudgeService
                 'output_limit' => $outputLimit,
                 'process_limit' => $this->config->get('process_limit'),
                 'entry_point' => $submission->getEntryPoint(),
+                'pass_limit' => $problem->getProblem()->getMultipassLimit(),
                 'hash' => $runExecutable->getHash(),
+                'overshoot' => $overshoot,
             ]
         );
     }
@@ -1546,7 +1562,7 @@ class DOMJudgeService
         }
         $zip->close();
 
-        return Utils::streamZipFile($tempFilename, 'contest.zip');
+        return Utils::streamZipFile($tempFilename, 'scoreboard.zip');
     }
 
     private function allowJudge(ContestProblem $problem, Submission $submission, Language $language, bool $manualRequest): bool
@@ -1572,7 +1588,7 @@ class DOMJudgeService
         return !$evalOnDemand;
     }
 
-    private function actuallyCreateJudgetasks(int $priority, Judging $judging): void
+    private function actuallyCreateJudgetasks(int $priority, Judging $judging, int $overshoot = 0): void
     {
         $submission = $judging->getSubmission();
         $problem    = $submission->getContestProblem();
@@ -1591,7 +1607,7 @@ class DOMJudgeService
             ':compare_script_id' => $this->getImmutableCompareExecutable($problem)->getImmutableExecId(),
             ':run_script_id' => $this->getImmutableRunExecutable($problem)->getImmutableExecId(),
             ':compile_config' => $this->getCompileConfig($submission),
-            ':run_config' => $this->getRunConfig($problem, $submission),
+            ':run_config' => $this->getRunConfig($problem, $submission, $overshoot),
             ':compare_config' => $this->getCompareConfig($problem),
         ];
 

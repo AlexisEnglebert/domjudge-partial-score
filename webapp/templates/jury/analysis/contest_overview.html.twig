@@ -81,6 +81,10 @@ $(function() {
       <div class="card">
         <div class="card-header">
           Language Stats
+            <a href="{{ path('analysis_languages', {'view': view}) }}" class="btn btn-sm btn-outline-primary">
+                <i class="fas fa-list"></i>
+                Details
+            </a>
         </div>
         <div class="card-body">
           <svg style="height: 300px"></svg>
@@ -341,6 +345,15 @@ nv.addGraph(function() {
   d3.select('#graph_problems svg')
       .datum(problem_stats)
       .call(chart);
+  // Hide bars with 0 height after rendering
+  chart.dispatch.on('renderEnd', function() {
+    d3.selectAll('#graph_problems .nv-bar').each(function(d) {
+      if (d.value === 0) {
+        d3.select(this).attr('height', 0);
+        d3.select(this).attr('y', chart.yAxis.scale()(0)); 
+      }
+    });
+  });
   nv.utils.windowResize(chart.update);
   return chart;
 });
@@ -352,44 +365,81 @@ nv.addGraph(function() {
 // x-axis is contest time
 // y axis is # of submissions
 
+var max_submissions_per_minute = 0;
+
 var submission_stats = [
   {% for result in ['correct', 'wrong-answer', 'timelimit', 'run-error', 'compiler-error', 'no-output'] %}
   {
     key: "{{result}}",
     color: "{{colors[result]}}",
-    values: [
-      {# TODO: make sure these are actually ordered by submittime #}
-      {# TODO: also make sure these submissions are in the same contest #}
-      [0,0],
-      {% set count = 0 %}
-      {% for submission in submissions | filter(submission => submission.result) %}
-        {% if submission.result == result %}{% set count = count +1 %}{% endif %}
-        [ {{ (submission.submittime - current_contest.starttime)/60.0 }},
-          {{ count }}
-        ],
-        {% endfor %}
-    ]
+    values: []
   },
   {% endfor %}
 ];
+
+var submissions = [
+  {% for submission in submissions %}
+  {
+    result: "{{ submission.result }}",
+    submittime: {{ submission.submittime }},
+    starttime: {{ current_contest.starttime }}
+  }{{ loop.last ? '' : ',' }}
+  {% endfor %}
+];
+
+var contest_duration_minutes = Math.ceil(({{ current_contest.endtime }} - {{ current_contest.starttime }}) / 60);
+
+submission_stats.forEach(stat => {
+  stat.values = Array.from({ length: contest_duration_minutes + 1 }, (_, i) => [i, 0]);
+});
+
+const statMap = submission_stats.reduce((map, stat) => {
+  map[stat.key] = stat;
+  return map;
+}, {});
+
+submissions.forEach(submission => {
+  let submission_minute = Math.floor((submission.submittime - submission.starttime) / 60);
+  let stat = statMap[submission.result];
+  if (stat && submission_minute >= 0 && submission_minute < contest_duration_minutes) {
+    stat.values[submission_minute][1]++;
+  }
+});
+
+for (let minute = 0; minute <= contest_duration_minutes; minute++) {
+  let this_minute_submission_nums = 0;
+  submission_stats.forEach(stat => {
+    this_minute_submission_nums += stat.values[minute][1];
+  });
+  max_submissions_per_minute = Math.max(max_submissions_per_minute, this_minute_submission_nums);
+}
+
+// Pick a nice round tickDelta and tickValues
+var tickDelta = 15;
+while (contest_duration_minutes / tickDelta > 15) {
+  tickDelta *= 2;
+}
+var tickValues = Array.from({ length: Math.ceil(contest_duration_minutes / tickDelta) + 1 }, (_, i) => i * tickDelta);
+
 nv.addGraph(function() {
-  var chart = nv.models.stackedAreaChart()
+  var chart = nv.models.multiBarChart()
       // .margin({left: 100})  //Adjust chart margins to give the x-axis some breathing room.
       // .useInteractiveGuideline(true)  //We want nice looking tooltips and a guideline!
       // .transitionDuration(350)  //how fast do you want the lines to transition?
       // .showLegend(true)       //Show the legend, allowing users to turn on/off line series.
       .showControls(false)
+      .stacked(true)
       .x(function(d) { return d[0] })   //We can modify the data accessor functions...
       .y(function(d) { return d[1] })   //...in case your data is formatted differently.
       .showYAxis(true)        //Show the y-axis
       .showXAxis(true)        //Show the x-axis
-      .forceX([0, {{ (current_contest.endtime - current_contest.starttime) / 60 }}])
-      .forceY([0, {{ submissions|length *1.10 }}])
+      .reduceXTicks(false)
       ;
   chart.xAxis     //Chart x-axis settings
       .axisLabel('Contest Time(minutes)')
+      .ticks(tickValues.length)
+      .tickValues(tickValues)
       .tickFormat(d3.format('d'));
-
   chart.yAxis     //Chart y-axis settings
       .axisLabel('Total Submissions')
       .tickFormat(d3.format('d'));

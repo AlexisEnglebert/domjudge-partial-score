@@ -90,6 +90,7 @@ class ProblemController extends BaseController
             'memlimit' => ['title' => 'memory limit', 'sort' => true],
             'outputlimit' => ['title' => 'output limit', 'sort' => true],
             'num_testcases' => ['title' => '# test cases', 'sort' => true],
+            'type' => ['title' => 'type', 'sort' => true],
         ];
 
         $contestCountData = $this->em->createQueryBuilder()
@@ -207,9 +208,17 @@ class ProblemController extends BaseController
             $problemdata['badges'] = ['value' => $badges];
 
             // merge in the rest of the data
+            $type = '';
+            if ($p->getCombinedRunCompare()) {
+                $type .= ' interactive';
+            }
+            if ($p->isMultipassProblem()) {
+                $type .= ' multi-pass (max passes: ' . $p->getMultipassLimit() . ')';
+            }
             $problemdata = array_merge($problemdata, [
                 'num_contests' => ['value' => (int)($contestCounts[$p->getProbid()] ?? 0)],
                 'num_testcases' => ['value' => (int)$row['testdatacount']],
+                'type' => ['value' => $type],
             ]);
 
             // Save this to our list of rows
@@ -485,6 +494,13 @@ class ProblemController extends BaseController
             new SubmissionRestriction(problemId: $problem->getProbid()),
         );
 
+        $type = '';
+        if ($problem->getCombinedRunCompare()) {
+            $type .= ' interactive';
+        }
+        if ($problem->isMultipassProblem()) {
+            $type .= ' multi-pass (max passes: ' . $problem->getMultipassLimit() . ')';
+        }
         $data = [
             'problem' => $problem,
             'problemAttachmentForm' => $problemAttachmentForm->createView(),
@@ -494,6 +510,7 @@ class ProblemController extends BaseController
             'defaultOutputLimit' => (int)$this->config->get('output_limit'),
             'defaultRunExecutable' => (string)$this->config->get('default_run'),
             'defaultCompareExecutable' => (string)$this->config->get('default_compare'),
+            'type' => $type,
             'showContest' => count($this->dj->getCurrentContests(honorCookie: true)) > 1,
             'showExternalResult' => $this->dj->shadowMode(),
             'lockedProblem' => $lockedProblem,

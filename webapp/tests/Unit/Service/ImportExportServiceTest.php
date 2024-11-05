@@ -105,7 +105,7 @@ class ImportExportServiceTest extends BaseTestCase
                 'start-time'               => '2020-01-01T12:34:56+02:00',
                 'scoreboard-freeze-length' => '30:00',
             ],
-            "Contest has errors:\n\nname: This value should not be blank.\nshortname: This value should not be blank."
+            "Contest has errors:\n\n  • `name`: This value should not be blank.\n  • `shortname`: This value should not be blank."
         ];
     }
 
@@ -501,7 +501,7 @@ EOF;
         // Remove the file, we don't need it anymore.
         unlink($fileName);
 
-        self::assertEquals(0, $importCount);
+        self::assertEquals(-1, $importCount);
         self::assertMatchesRegularExpression('/Only alphanumeric characters and _-@. are allowed/', $message);
 
         $postCount = $em->getRepository(User::class)->count([]);
@@ -679,6 +679,7 @@ EOF;
 File_Version	2
 11	447047	24	¡i¡i¡	Lund University	LU	SWE	INST-42
 12	447837	25	Pleading not FAUlty	Friedrich-Alexander-University Erlangen-Nuremberg	FAU	DEU	INST-43
+13	447057	24	Another team from Lund	Lund University	LU	SWE	INST-42
 EOF;
 
         $expectedTeams = [
@@ -709,6 +710,20 @@ EOF;
                     'shortname' => 'FAU',
                     'name' => 'Friedrich-Alexander-University Erlangen-Nuremberg',
                     'country' => 'DEU',
+                ],
+            ], [
+                'externalid' => '13',
+                'icpcid' => '447057',
+                'label' => null,
+                'name' => 'Another team from Lund',
+                'category' => [
+                    'externalid' => '24',
+                ],
+                'affiliation' => [
+                    'externalid' => '42',
+                    'shortname' => 'LU',
+                    'name' => 'Lund University',
+                    'country' => 'SWE',
                 ],
             ],
         ];
@@ -870,8 +885,8 @@ EOF;
         // Remove the file, we don't need it anymore.
         unlink($fileName);
 
-        self::assertMatchesRegularExpression('/name: This value should not be blank./', $message);
-        self::assertEquals(0, $importCount);
+        self::assertMatchesRegularExpression('/.*`name`: This value should not be blank.*/', $message);
+        self::assertEquals(-1, $importCount);
 
         $postCount = $em->getRepository(Team::class)->count([]);
         self::assertEquals($preCount, $postCount);
@@ -908,8 +923,8 @@ EOF;
         // Remove the file, we don't need it anymore.
         unlink($fileName);
 
-        self::assertMatchesRegularExpression('/name: This value should not be blank./', $message);
-        self::assertEquals(0, $importCount);
+        self::assertMatchesRegularExpression('/.*`name`: This value should not be blank.*/', $message);
+        self::assertEquals(-1, $importCount);
 
         $postCount = $em->getRepository(Team::class)->count([]);
         self::assertEquals($preCount, $postCount);
@@ -1050,8 +1065,8 @@ EOF;
         // Remove the file, we don't need it anymore.
         unlink($fileName);
 
-        self::assertMatchesRegularExpression('/name: This value should not be blank/', $message);
-        self::assertEquals(0, $importCount);
+        self::assertMatchesRegularExpression('/.*`name`: This value should not be blank.*/', $message);
+        self::assertEquals(-1, $importCount);
 
         $postCount = $em->getRepository(TeamCategory::class)->count([]);
         self::assertEquals($preCount, $postCount);
@@ -1150,7 +1165,7 @@ EOF;
         unlink($fileName);
 
         self::assertMatchesRegularExpression('/ISO3166-1 alpha-3 values are allowed/', $message);
-        self::assertEquals(0, $importCount);
+        self::assertEquals(-1, $importCount);
 
         $postCount = $em->getRepository(TeamAffiliation::class)->count([]);
         self::assertEquals($preCount, $postCount);
@@ -1167,7 +1182,7 @@ EOF;
     /**
      * @dataProvider provideGetResultsData
      */
-    public function testGetResultsData(bool $full, bool $honors, string $expectedResultsFile): void
+    public function testGetResultsData(bool $full, bool $honors, string $dataSet, string $expectedResultsFile): void
     {
         // Set up some results we can test with
         // This data is based on the ICPC World Finals 47
@@ -1176,16 +1191,20 @@ EOF;
 
         $startTime = new DateTimeImmutable('2023-05-01 08:00:00');
 
+        $medalData = json_decode(file_get_contents(__DIR__ . '/../Fixtures/' . $dataSet . '/sample-medals.json'), true);
+
         $contest = (new Contest())
             ->setName('ICPC World Finals 47')
             ->setShortname('wf47')
             ->setStarttimeString($startTime->format(DateTimeInterface::ATOM))
-            ->setEndtimeString($startTime->add(new DateInterval('PT5H'))->format(DateTimeInterface::ATOM));
-        $em->persist($contest);
-        $em->flush();
+            ->setEndtimeString($startTime->add(new DateInterval('PT5H'))->format(DateTimeInterface::ATOM))
+            ->setMedalsEnabled(true)
+            ->setGoldMedals($medalData['medals']['gold'])
+            ->SetSilverMedals($medalData['medals']['silver'])
+            ->setBronzeMedals($medalData['medals']['bronze']);
 
         $groupsById = [];
-        $groupsData = json_decode(file_get_contents(__DIR__ . '/../Fixtures/sample-groups.json'), true);
+        $groupsData = json_decode(file_get_contents(__DIR__ . '/../Fixtures/' . $dataSet . '/sample-groups.json'), true);
         foreach ($groupsData as $groupData) {
             $group = (new TeamCategory())
                 ->setExternalid($groupData['id'])
@@ -1194,8 +1213,15 @@ EOF;
             $em->persist($group);
             $em->flush();
             $groupsById[$group->getExternalid()] = $group;
+            if (in_array($group->getExternalid(), $medalData['medal_categories'], true)) {
+                $contest->addMedalCategory($group);
+            }
         }
-        $teamsData = json_decode(file_get_contents(__DIR__ . '/../Fixtures/sample-teams.json'), true);
+
+        $em->persist($contest);
+        $em->flush();
+
+        $teamsData = json_decode(file_get_contents(__DIR__ . '/../Fixtures/'. $dataSet . '/sample-teams.json'), true);
         /** @var array<string,Team> $teamsById */
         $teamsById = [];
         /** @var array<string,Team> $teamsByIcpcId */
@@ -1213,7 +1239,7 @@ EOF;
             $teamsByIcpcId[$team->getIcpcId()] = $team;
         }
 
-        $problemsData = json_decode(file_get_contents(__DIR__ . '/../Fixtures/sample-problems.json'), true);
+        $problemsData = json_decode(file_get_contents(__DIR__ . '/../Fixtures/'. $dataSet . '/sample-problems.json'), true);
         $contestProblemsById = [];
         foreach ($problemsData as $problemData) {
             $problem = (new Problem())
@@ -1239,7 +1265,7 @@ EOF;
         $submissionInsertQuery->bindValue('cid', $contest->getCid());
         $submissionInsertQuery->bindValue('langid', $cpp->getLangid());
 
-        $scoreboardData = json_decode(file_get_contents(__DIR__ . '/../Fixtures/sample-scoreboard.json'), true);
+        $scoreboardData = json_decode(file_get_contents(__DIR__ . '/../Fixtures/'. $dataSet . '/sample-scoreboard.json'), true);
         foreach ($scoreboardData['rows'] as $scoreboardRow) {
             $team = $teamsById[$scoreboardRow['team_id']];
             $submissionInsertQuery->bindValue('teamid', $team->getTeamid());
@@ -1290,7 +1316,7 @@ EOF;
 
         $results = $importExportService->getResultsData(37, $full, $honors);
 
-        $resultsContents = file_get_contents(__DIR__ . '/../Fixtures/' . $expectedResultsFile);
+        $resultsContents = file_get_contents(__DIR__ . '/../Fixtures/' . $dataSet . '/' . $expectedResultsFile);
         $resultsContents = substr($resultsContents, strpos($resultsContents, "\n") + 1);
         // Prefix file with a fake header, so we can deserialize them
         $resultsContents = "team_id\trank\taward\tnum_solved\ttotal_time\ttime_of_last_submission\tgroup_winner\n" . $resultsContents;
@@ -1306,9 +1332,13 @@ EOF;
 
     public function provideGetResultsData(): Generator
     {
-        yield [true, true, 'results-full-honors.tsv'];
-        yield [false, true, 'results-wf-honors.tsv'];
-        yield [true, false, 'results-full-ranked.tsv'];
-        yield [false, false, 'results-wf-ranked.tsv'];
+        yield [true, true, 'wf', 'results-full-honors.tsv'];
+        yield [false, true, 'wf', 'results-wf-honors.tsv'];
+        yield [true, false, 'wf', 'results-full-ranked.tsv'];
+        yield [false, false, 'wf', 'results-wf-ranked.tsv'];
+        yield [true, true, 'sample', 'results-full-honors.tsv'];
+        yield [false, true, 'sample', 'results-wf-honors.tsv'];
+        yield [true, false, 'sample', 'results-full-ranked.tsv'];
+        yield [false, true, 'sample', 'results-wf-honors.tsv'];
     }
 }

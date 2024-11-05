@@ -444,9 +444,14 @@ class ImportProblemService
 
                 if (isset($yamlData['validation'])
                     && ($yamlData['validation'] == 'custom' ||
-                        $yamlData['validation'] == 'custom interactive')) {
+                        $yamlData['validation'] == 'custom interactive' ||
+                        $yamlData['validation'] == 'custom multi-pass')) {
                     if (!$this->searchAndAddValidator($zip, $messages, $externalId, $yamlData['validation'], $problem)) {
                         return null;
+                    }
+
+                    if ($yamlData['validation'] == 'custom multi-pass') {
+                        $problem->setMultipassProblem(true);
                     }
                 }
 
@@ -456,6 +461,9 @@ class ImportProblemService
                     }
                     if (isset($yamlData['limits']['output'])) {
                         $yamlProblemProperties['outputlimit'] = 1024 * $yamlData['limits']['output'];
+                    }
+                    if (isset($yamlData['limits']['validation_passes'])) {
+                        $problem->setMultipassLimit($yamlData['limits']['validation_passes']);
                     }
                 }
 
@@ -845,6 +853,14 @@ class ImportProblemService
                 continue;
             }
 
+            // In doubt make files executable, but try to read it from the zip file.
+            $executableBit = true;
+            if ($zip->getExternalAttributesIndex($j, $opsys, $attr)
+                && $opsys==ZipArchive::OPSYS_UNIX
+                && (($attr >> 16) & 0100) === 0) {
+                $executableBit = false;
+            }
+
             $name = basename($filename);
 
             $fileParts = explode('.', $name);
@@ -864,6 +880,10 @@ class ImportProblemService
                     $messages['info'][] = sprintf("Updated attachment '%s'", $name);
                     $numAttachments++;
                 }
+                if ($executableBit !== $attachmentContent->isExecutable()) {
+                    $attachmentContent->setIsExecutable($executableBit);
+                    $messages['info'][] = sprintf("Updated executable bit of attachment '%s'", $name);
+                }
             } else {
                 $attachment = new ProblemAttachment();
                 $attachmentContent = new ProblemAttachmentContent();
@@ -873,7 +893,9 @@ class ImportProblemService
                     ->setType($type)
                     ->setContent($attachmentContent);
 
-                $attachmentContent->setContent($content);
+                $attachmentContent
+                    ->setContent($content)
+                    ->setIsExecutable($executableBit);
 
                 $this->em->persist($attachment);
 

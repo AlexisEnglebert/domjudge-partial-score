@@ -15,8 +15,8 @@ use App\Entity\Language;
 use App\Entity\Problem;
 use App\Entity\Submission;
 use App\Entity\SubmissionFile;
-use App\Entity\TeamCategory;
 use App\Entity\Team;
+use App\Entity\TeamCategory;
 use App\Entity\Testcase;
 use App\Service\AwardService;
 use App\Service\ConfigurationService;
@@ -1023,8 +1023,8 @@ EOF;
         if (is_null($col)) {
             return $text;
         }
-        preg_match_all("/[0-9A-Fa-f]{2}/", $col, $m);
-        if (!count($m)) {
+        $ret = preg_match_all("/[0-9A-Fa-f]{2}/", $col, $m);
+        if (!($ret && count($m[0]))) {
             return $text;
         }
 
@@ -1061,9 +1061,12 @@ EOF;
         return 'fas fa-file-' . $iconName;
     }
 
-    public function problemBadge(ContestProblem $problem): string
+    public function problemBadge(ContestProblem $problem, bool $grayedOut = false): string
     {
         $rgb        = Utils::convertToHex($problem->getColor() ?? '#ffffff');
+        if ($grayedOut) {
+            $rgb = 'whitesmoke';
+        }
         $background = Utils::parseHexColor($rgb);
 
         // Pick a border that's a bit darker.
@@ -1075,6 +1078,10 @@ EOF;
 
         // Pick the foreground text color based on the background color.
         $foreground = ($background[0] + $background[1] + $background[2] > 450) ? '#000000' : '#ffffff';
+        if ($grayedOut) {
+            $foreground = 'silver';
+            $border = 'linen';
+        }
         return sprintf(
             '<span class="badge problem-badge" style="background-color: %s; border: 1px solid %s"><span style="color: %s;">%s</span></span>',
             $rgb,
@@ -1105,7 +1112,8 @@ EOF;
             . Utils::printsize((int)($metadata['memory-bytes'])) . ', '
             . '<i class="far fa-question-circle" title="exit-status"></i> '
             . 'exit-code: ' . $metadata['exitcode']
-            . (($metadata['signal'] ?? -1) > 0 ? ' signal: ' . $metadata['signal'] : '');
+            . (($metadata['signal'] ?? -1) > 0 ? ' signal: ' . $metadata['signal'] : '')
+            . '</span>';
     }
 
     public function printWarningContent(ExternalSourceWarning $warning): string

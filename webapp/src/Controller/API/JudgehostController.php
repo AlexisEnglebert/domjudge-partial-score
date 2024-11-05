@@ -30,14 +30,14 @@ use App\Service\SubmissionService;
 use App\Utils\Utils;
 use BadMethodCallException;
 use Doctrine\DBAL\ArrayParameterType;
-use Doctrine\DBAL\Exception as DBALException;
 use Doctrine\DBAL\Exception;
+use Doctrine\DBAL\Exception as DBALException;
 use Doctrine\ORM\AbstractQuery;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\Exception\ORMException;
 use Doctrine\ORM\NonUniqueResultException;
 use Doctrine\ORM\NoResultException;
-use Doctrine\ORM\Exception\ORMException;
 use Doctrine\ORM\Query;
 use Doctrine\ORM\Query\Expr\Join;
 use FOS\RestBundle\Controller\AbstractFOSRestController;
@@ -46,12 +46,12 @@ use Nelmio\ApiDocBundle\Annotation\Model;
 use OpenApi\Attributes as OA;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\ExpressionLanguage\Expression;
-use Symfony\Component\HttpKernel\Attribute\MapQueryParameter;
-use Symfony\Component\HttpKernel\Exception\HttpException;
-use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpKernel\Attribute\MapQueryParameter;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[Rest\Route('/judgehosts')]
 #[OA\Tag(name: 'Judgehosts')]
@@ -77,7 +77,7 @@ class JudgehostController extends AbstractFOSRestController
      *
      * @return Judgehost[]
      */
-    #[IsGranted('ROLE_JURY')]
+    #[IsGranted(new Expression("is_granted('ROLE_JURY') or is_granted('ROLE_JUDGEHOST')"))]
     #[Rest\Get('')]
     #[OA\Response(
         response: 200,
@@ -431,7 +431,7 @@ class JudgehostController extends AbstractFOSRestController
                             ->setJudging($judging)
                             ->setContest($judging->getContest())
                             ->setDescription('Compilation results are different for j' . $judging->getJudgingid())
-                            ->setJudgehostlog('New compilation output: ' . $output_compile)
+                            ->setJudgehostlog(base64_encode('New compilation output: ' . $output_compile))
                             ->setTime(Utils::now())
                             ->setDisabled($disabled);
                         $this->em->persist($error);
@@ -1159,7 +1159,7 @@ class JudgehostController extends AbstractFOSRestController
                         ->getResult();
                     // TODO: Pick up priority from previous judgings?
                     $this->rejudgingService->createRejudging($rejudging->getReason(), JudgeTask::PRIORITY_DEFAULT, $judgings,
-                        false, $rejudging->getRepeat(), $rejudging->getRepeatedRejudging(), $skipped);
+                        false, $rejudging->getRepeat(), 0, $rejudging->getRepeatedRejudging(), $skipped);
                 }
             }
         }
