@@ -22,7 +22,6 @@ use Doctrine\ORM\NonUniqueResultException;
 use Doctrine\ORM\NoResultException;
 use Exception;
 use InvalidArgumentException;
-use PHPUnit\Framework\Constraint\IsEmpty;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\Request;
@@ -266,172 +265,13 @@ class ImportProblemService
         if ($problemYaml !== false) {
             $yamlData = Yaml::parse($problemYaml);
 
-            if ($hasErrors) {
-                return null;
-            }
-
-            if ($problemYaml !== false) {
-                $yamlData = Yaml::parse($problemYaml);
-
-                if (!empty($yamlData)) {
-                    $yamlProblemProperties = [];
-                    if (isset($yamlData['name'])) {
-                        if (is_array($yamlData['name'])) {
-                            foreach ($yamlData['name'] as $name) {
-                                // TODO: select a specific instead of the first language.
-                                $yamlProblemProperties['name'] = $name;
-                                break;
-                            }
-                        } else {
-                            $yamlProblemProperties['name'] = $yamlData['name'];
-                        }
-                    }
-                    if (isset($yamlData['validator_flags'])) {
-                        $yamlProblemProperties['special_compare_args'] = $yamlData['validator_flags'];
-                    }
-
-                    if (isset($yamlData['validation'])
-                        && ($yamlData['validation'] == 'custom' ||
-                            $yamlData['validation'] == 'custom interactive')) {
-                        if (!$this->searchAndAddValidator($zip, $messages, $externalId, $yamlData['validation'], $problem)) {
-                            return null;
-                        }
-                    }
-
-                    if (isset($yamlData['limits'])) {
-                        if (isset($yamlData['limits']['memory'])) {
-                            $yamlProblemProperties['memlimit'] = 1024 * $yamlData['limits']['memory'];
-                        }
-                        if (isset($yamlData['limits']['output'])) {
-                            $yamlProblemProperties['outputlimit'] = 1024 * $yamlData['limits']['output'];
-                        }
-                    }
-
-                    foreach ($yamlProblemProperties as $key => $value) {
-                        $propertyAccessor->setValue($problem, $key, $value);
-                    }
-                }
-            }
-
-            // Add problem statement, also look in obsolete location.
-            foreach (['problem_statement/', ''] as $dir) {
-                foreach (['pdf', 'html', 'txt'] as $type) {
-                    $filename = sprintf('%sproblem.%s', $dir, $type);
-                    $text     = $zip->getFromName($filename);
-                    if ($text !== false) {
-                        $content = (new ProblemStatementContent())
-                            ->setContent($text);
-                        $problem
-                            ->setProblemStatementContent($content)
-                            ->setProblemstatementType($type);
-                        $messages['info'][] = "Added/updated problem statement from: $filename";
-                        break 2;
-                    }
-                }
-            }
-
-            $this->em->persist($problem);
-            if ($contestProblem) {
-                $contestProblem->setProblem($problem);
-                $contestProblem->setContest($contest);
-                $this->em->persist($contestProblem);
-            }
-            $this->em->flush();
-
-            // Load the current testcases to see if we need to delete, update or insert testcases.
-            $existingTestcases = [];
-            if ($problem->getProbid()) {
-                /** @var Testcase[] $testcaseData */
-                $testcaseData = $this->em
-                    ->createQueryBuilder()
-                    ->from(Testcase::class, 't')
-                    ->select('t')
-                    ->andWhere('t.problem = :problem')
-                    ->setParameter('problem', $problem)
-                    ->getQuery()
-                    ->getResult();
-                foreach ($testcaseData as $testcase) {
-                    $index = sprintf(
-                        '%s-%s-%s',
-                        $testcase->getMd5sumInput(),
-                        $testcase->getMd5sumOutput(),
-                        $testcase->getOrigInputFilename());
-                    $existingTestcases[$index] = $testcase;
-                }
-            }
-
-            $touchedTestcases = [];
-
-            // Keep track of the final testcases. We do this because we need rank them.
-            // We can't do this 'on the fly' when updating since we will get
-            // issues with duplicate keys. Instead, we give every testcase a temporary
-            // rank we know is unique and give the final ranks in the end.
-            /** @var Testcase[] $testcases */
-            $testcases     = [];
-            $testcaseNames = [];
-
-            $startRank = 1;
-            // We temporarily assign ranks starting from the current max rank + 1 when updating a problem.
-            // These are guaranteed to not exist.
-            if ($problem->getProbid()) {
-                $startRank = $problem->getTestcases()->count() + 1;
-            }
-            $rank       = $startRank;
-            $actualRank = 1;
-
-            // First insert sample, then secret data in alphabetical order.
-            foreach (['sample', 'secret'] as $type) {
-                $numCases  = 0;
-                $dataFiles = [];
-                $groupFiles =[];
-                for ($j = 0; $j < $zip->numFiles; $j++) {
-                    $filename = $zip->getNameIndex($j);
-                    if (Utils::startsWith($filename, sprintf('data/%s/', $type)) &&
-                        Utils::endsWith($filename, '.in')) {
-                        $fileout  = preg_replace("/\.in$/", ".ans", $filename);
-                        if ($zip->locateName($fileout) !== false) {
-                            $basename = basename($filename, ".in");
-                            $dirname = dirname($filename);
-                            $dataFiles[] = preg_replace("|^data/$type/|", "", sprintf('%s/%s', $dirname, $basename));
-                        }
-                    } else if(Utils::startsWith($filename, sprintf('data/%s/', $type)) && Utils::endsWith($filename, '.yaml')){
-                        // Our testdata.yaml
-                        $value = YAML::parse($filename);
-                        //implode(", ", $value)
-                        $messages['warning'][] = sprintf("FOUND A TESTDATA FILE: %s", $value);
-
-                    }
-                }
-                asort($dataFiles, SORT_STRING);
-
-                foreach ($dataFiles as $dataFile) {
-                    $baseFileName = sprintf('data/%s/%s', $type, $dataFile);
-                    $testInput  = $zip->getFromName($baseFileName . '.in');
-                    $testOutput = $zip->getFromName($baseFileName . '.ans');
-                    $imageType = $imageThumb = false;
-                    foreach (['png', 'jpg', 'jpeg', 'gif'] as $imgExtension) {
-                        $imageFileName = $baseFileName . '.' . $imgExtension;
-                        if (($imageFile = $zip->getFromName($imageFileName)) !== false) {
-                            $imageType = Utils::getImageType($imageFile, $errormsg);
-                            if ($imageType === false) {
-                                $messages['info'][] = sprintf("Reading '%s': %s", $imageFileName, $errormsg);
-                                $imageFile  = false;
-                            } elseif ($imageType !== ($imgExtension == 'jpg' ? 'jpeg' : $imgExtension)) {
-                                $messages['warning'][] = sprintf("Extension of '%s' does not match type '%s'.",
-                                                    $imageFileName, $imageType);
-                                $imageFile  = false;
-                            } else {
-                                $thumbnailSize = $this->config->get('thumbnail_size');
-                                $imageThumb    = Utils::getImageThumb(
-                                    $imageFile, $thumbnailSize,
-                                    $this->dj->getDomjudgeTmpDir(),
-                                    $errormsg
-                                );
-                                if ($imageThumb === false) {
-                                    $imageThumb = null;
-                                    $messages['info'][] = sprintf("Reading '%s': %s", $imageFileName, $errormsg);
-                                }
-                            }
+            if (!empty($yamlData)) {
+                $yamlProblemProperties = [];
+                if (isset($yamlData['name'])) {
+                    if (is_array($yamlData['name'])) {
+                        foreach ($yamlData['name'] as $name) {
+                            // TODO: select a specific instead of the first language.
+                            $yamlProblemProperties['name'] = $name;
                             break;
                         }
                     } else {
@@ -527,8 +367,10 @@ class ImportProblemService
         // issues with duplicate keys. Instead, we give every testcase a temporary
         // rank we know is unique and give the final ranks in the end.
         /** @var Testcase[] $testcases */
-        $testcases     = [];
-        $testcaseNames = [];
+        $testcases          = [];
+        $testgroups         = [];
+        $testGroupPathsToId = array();
+        $testcaseNames      = [];
 
         $startRank = 1;
         // We temporarily assign ranks starting from the current max rank + 1 when updating a problem.
@@ -539,7 +381,70 @@ class ImportProblemService
         $rank       = $startRank;
         $actualRank = 1;
 
-        $groupFiles = [];
+        // First search for testGroups
+
+        for ($j = 0; $j < $zip->numFiles; $j++) {
+            $filename = $zip->getNameIndex($j);
+            if(Utils::endsWith($filename, 'testdata.yaml')){
+                $valueData = YAML::parse($zip->getFromName($filename));
+                if(!empty($valueData)) {
+                    $isGradingSet = isset($valueData['grading']);
+
+                    $isNameSet = isset($valueData['name']);
+
+                    if(!$isNameSet) {
+                        $messages['danger'][] = sprintf(
+                            'Error: Could not find name field in testdata.yaml in %s.', $filename);
+                        return null;
+                    }
+
+                    $testGroupLabel = $valueData['name'];
+
+                    //$testGroupLabel = basename(dirname($filename));
+
+                    if(array_key_exists($testGroupLabel, $testgroups)) {
+                        $messages['warning'][] = sprintf(
+                            'Error: Duplicate test group name: %s.', $testGroupLabel);
+                        //TODO CHECK ICI si il y a pas une couille
+                    }
+
+                    if (!$isGradingSet) {
+                        $messages['danger'][] = sprintf("Error: %s doesn't contain grading field", YAML::dump($valueData));
+                        return null;
+                    } else {
+                        $messages['info'][] = sprintf("adding new testgroup: %s", $testGroupLabel);
+                        $testgroups[$testGroupLabel] = new TestGroup();
+                        $testgroups[$testGroupLabel]->setProblem($problem);
+                        $testgroups[$testGroupLabel]->setName($testGroupLabel);
+
+                        $isScoreSet = isset($valueData['grading']['score']);
+                        if($isScoreSet) {
+                            try {
+                                $testgroups[$testGroupLabel]->setScore($valueData['grading']['score']);
+                            } catch(Exception $e) {
+                                $messages['danger'][] = sprintf('The score value is not an int : %s', $e->getMessage());
+                                return null;
+                            }
+                        }
+                        $isAggregationSet = isset($valueData['grading']['aggregation']);
+                        if($isAggregationSet) {
+                            //TODO CHECK IF IS IN VALID AGGREGATIONS
+                            $testgroups[$testGroupLabel]->setAggregation(trim($valueData['grading']['aggregation']));
+                        }
+
+                        $isDescriptionSet = isset($valueData['grading']['description']);
+                        if($isDescriptionSet) {
+                            $testgroups[$testGroupLabel]->setDescription(trim($valueData['grading']['description']));
+                        }
+                        $this->em->persist($testgroups[$testGroupLabel]);
+                        $this->em->flush();
+
+                        $testGroupPathsToId +=  [dirname($filename) => $testgroups[$testGroupLabel]->getTestGroupId()];
+                    }
+                }
+            }
+        }
+
 
         // First insert sample, then secret data in alphabetical order.
         foreach (['sample', 'secret'] as $type) {
@@ -555,145 +460,16 @@ class ImportProblemService
                         $dirname = dirname($filename);
                         $dataFiles[] = preg_replace("|^data/$type/|", "", sprintf('%s/%s', $dirname, $basename));
                     }
-                } else if(Utils::startsWith($filename, sprintf('data/%s/', $type)) && Utils::endsWith($filename, '.yaml')){
-                    // Our testdata.yaml
-
-                    $valueData = YAML::parse($zip->getFromName($filename));
-                    $testGroupLabel = basename(dirname($filename));
-                    if(!empty($valueData)) {
-                        $isGradingSet = isset($valueData['grading']);
-                        if (!$isGradingSet) {
-                            $messages['danger'][] = sprintf("%s doesn't contain grading field", YAML::dump($valueData));
-                        } else {
-                            $messages['info'][] = sprintf("adding new testgroup: %s", $testGroupLabel);
-
-                            $groupFiles[$testGroupLabel] = new TestGroup();
-                            $groupFiles[$testGroupLabel]->setProblem($problem);
-                            $groupFiles[$testGroupLabel]->setName($testGroupLabel);
-
-                            $isScoreSet = isset($valueData['grading']['score']);
-                            if($isScoreSet) {
-                                try {
-                                    $groupFiles[$testGroupLabel]->setScore($valueData['grading']['score']);
-                                } catch(Exception $e) {
-                                    $messages['danger'][] = sprintf('The score value is not an int : %s', $e->getMessage());
-                                }
-                            }
-                            $isAggregationSet = isset($valueData['grading']['aggregation']);
-                            if($isAggregationSet) {
-                                //TODO CHECK IF IS IN VALID AGGREGATIONS
-                                $groupFiles[$testGroupLabel]->setAggregation(trim($valueData['grading']['aggregation']));
-                            }
-
-                            $isDescriptionSet = isset($valueData['grading']['description']);
-                            if($isDescriptionSet) {
-                                $groupFiles[$testGroupLabel]->setDescription(trim($valueData['grading']['description']));
-                            }
-
-                            $this->em->persist($groupFiles[$testGroupLabel]);
-                            $this->em->flush();
-                        }
-                    }
                 }
-
-            if ($numJurySolutions > 0) {
-                $messages['info'][] = sprintf('Added %d jury solution(s): %s', $numJurySolutions,
-                    join(', ', $successful_subs));
             }
-            if (!empty($subs_with_unknown_lang)) {
-                $messages['warning'][] = sprintf("Could not add jury solution(s) due to unknown language: %s",
-                    join(', ', $subs_with_unknown_lang));
-            }
-            if (!empty($too_large_subs)) {
-                $messages['warning'][] = sprintf("Could not add jury solution(s) because they are too large: %s",
-                    join(', ', $too_large_subs));
-            }
-        } else {
-            $messages['warning'][] = 'No jury solutions added: problem not submittable.';
-        }
 
-        $messages['info'][] = sprintf('Saved problem %d', $problem->getProbid());
-
-        // Only here disable problem submit to make sure the jury submissions
-        // do get added above.
-        if ($contestProblem) {
-            $this->em->flush();
-            // We need to reload the problem after the call(s) to the eventLogService.
-            $problem = $this->em->getRepository(Problem::class)->find($problem->getProbid());
-            $testcases = $problem->getTestcases()->toArray();
-            if (count(array_filter($testcases, fn($t) => !$t->getDeleted())) == 0) {
-                // We need to reload the contest problem after the call(s) to the eventLogService.
-                $contestProblem = $this->em->getRepository(ContestProblem::class)->findOneBy([
-                    'contest' => $contest,
-                    'problem' => $problem,
-                ]);
-                $messages['danger'][] = 'No testcases present, disabling submitting for this problem';
-                $contestProblem->setAllowSubmit(false);
-            }
-        }
-
-        // Make sure we persisted all changes to DB
-        $this->em->flush();
-
-        return $problem;
-    }
-
-    /**
-     * @return array{problem_id: string, messages: array<string, string[]>}
-     */
-    public function importProblemFromRequest(Request $request, ?int $contestId = null): array
-    {
-        $file = $request->files->get('zip');
-        if (empty($file)) {
-            throw new BadRequestHttpException('ZIP file missing');
-        }
-
-        $contest = null;
-        if ($contestId) {
-            /** @var Contest $contest */
-            $contest = $this->em->getRepository(Contest::class)->find($contestId);
-        }
-        $allMessages = [];
-
-        // Only timeout after 2 minutes, since importing may take a while.
-        set_time_limit(120);
-
-        $probId  = $request->request->get('problem');
-        $problem = null;
-        if (!empty($probId)) {
-            $problem = $this->em->createQueryBuilder()
-                ->from(Problem::class, 'p')
-                ->select('p')
-                ->andWhere('p.externalid = :id')
-                ->setParameter('id', $probId)
-                ->getQuery()
-                ->getOneOrNullResult();
-            if (empty($problem)) {
-                throw new BadRequestHttpException('Specified \'problem\' does not exist.');
-            }
-        }
-        $errors = [];
-        $zip    = null;
-        try {
-            $zip         = $this->dj->openZipFile($file->getRealPath());
-            $clientName  = $file->getClientOriginalName();
-            $messages    = [];
-            $newProblem  = $this->importZippedProblem(
-                $zip, $clientName, $problem, $contest, $messages
-            );
-            $allMessages = array_merge($allMessages, $messages);
-            if ($newProblem) {
-                $this->dj->auditlog('problem', $newProblem->getProbid(), 'upload zip', $clientName);
-                $probId = $newProblem->getExternalid();
-            } else {
-                $messages['warning'][] = 'No jury solutions added: problem not submittable.';
-            }
             asort($dataFiles, SORT_STRING);
 
             foreach ($dataFiles as $dataFile) {
                 $baseFileName = sprintf('data/%s/%s', $type, $dataFile);
                 $testInput  = $zip->getFromName($baseFileName . '.in');
                 $testOutput = $zip->getFromName($baseFileName . '.ans');
+
                 $imageType = $imageThumb = false;
                 foreach (['png', 'jpg', 'jpeg', 'gif'] as $imgExtension) {
                     $imageFileName = $baseFileName . '.' . $imgExtension;
@@ -704,7 +480,7 @@ class ImportProblemService
                             $imageFile  = false;
                         } elseif ($imageType !== ($imgExtension == 'jpg' ? 'jpeg' : $imgExtension)) {
                             $messages['warning'][] = sprintf("Extension of '%s' does not match type '%s'.",
-                                                $imageFileName, $imageType);
+                                                  $imageFileName, $imageType);
                             $imageFile  = false;
                         } else {
                             $thumbnailSize = $this->config->get('thumbnail_size');
@@ -769,14 +545,14 @@ class ImportProblemService
                     ->setOrigInputFilename($dataFile);
 
                 //Add the testcase to the corresponding testGroup
-                $testcaseTestgroup = basename(dirname($baseFileName));
-                $isTestGroupSet = isset($groupFiles[$testcaseTestgroup]);
-
-                if(!$isTestGroupSet) {
-                    $messages['danger'][] = sprintf("No testdata.yaml found for  %s", $testcaseTestgroup);
-                } else {
-                    $testcase->SetTestgroupId($groupFiles[$testcaseTestgroup]->getTestGroupId());
+                $fileDir = dirname(sprintf("%s%s",$baseFileName,".in"));
+                if(!array_key_exists($fileDir, $testGroupPathsToId)) {
+                    $messages['danger'][] = sprintf("No testdata.yaml found for  %s (%s)", $fileDir,var_export($testGroupPathsToId, true));
+                    return null;
                 }
+
+                $testcase->SetTestgroupId($testGroupPathsToId[$fileDir]);
+
 
                 $testcaseContent
                     ->setInput($testInput)
@@ -798,7 +574,6 @@ class ImportProblemService
 
                 $testcases[] = $testcase;
                 $testcaseNames[] = $dataFile;
-
             }
             if ($numCases > 0) {
                 $messages['info'][] = sprintf("Added/updated %d %s testcase(s): {%s}.{in,ans}",
@@ -1194,7 +969,7 @@ class ImportProblemService
             $problem = $this->em->createQueryBuilder()
                 ->from(Problem::class, 'p')
                 ->select('p')
-                ->andWhere(sprintf('p.%s = :id', $this->eventLogService->externalIdFieldForEntity(Problem::class) ?? 'probid'))
+                ->andWhere('p.externalid = :id')
                 ->setParameter('id', $probId)
                 ->getQuery()
                 ->getOneOrNullResult();
@@ -1214,7 +989,7 @@ class ImportProblemService
             $allMessages = array_merge($allMessages, $messages);
             if ($newProblem) {
                 $this->dj->auditlog('problem', $newProblem->getProbid(), 'upload zip', $clientName);
-                $probId = $newProblem->getApiId($this->eventLogService);
+                $probId = $newProblem->getExternalid();
             } else {
                 $errors = array_merge($errors, $messages);
             }
@@ -1230,7 +1005,6 @@ class ImportProblemService
             'problem_id' => $probId,
             'messages'   => $allMessages,
         ];
-
     }
 
     /**

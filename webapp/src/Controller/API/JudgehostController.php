@@ -19,6 +19,7 @@ use App\Entity\Rejudging;
 use App\Entity\Submission;
 use App\Entity\SubmissionFile;
 use App\Entity\TestcaseContent;
+use App\Entity\Testcase;
 use App\Entity\Version;
 use App\Service\BalloonService;
 use App\Service\ConfigurationService;
@@ -983,10 +984,12 @@ class JudgehostController extends AbstractFOSRestController
         // we're done or if more testcases need to be judged.
 
         /** @var JudgingRun[] $runs */
+
+        //TODO ON DOIT RÉCUPÉRER LE TESTCASE ID !!
         $runs = $this->em->createQueryBuilder()
             ->from(JudgeTask::class, 'jt')
             ->leftJoin(JudgingRun::class, 'jr', Join::WITH, 'jt.testcase_id = jr.testcase AND jr.judging = :judgingid')
-            ->select('jr.runresult')
+            ->select('jr.runresult, jt.testcase_id')
             ->andWhere('jt.jobid = :judgingid')
             ->andWhere('jr.judging = :judgingid')
             ->andWhere('jt.testcase_id = jr.testcase')
@@ -994,12 +997,28 @@ class JudgehostController extends AbstractFOSRestController
             ->setParameter('judgingid', $judging->getJudgingid())
             ->getQuery()
             ->getArrayResult();
+
+
+
+
         $runresults = array_column($runs, 'runresult');
+        $testcaseid = array_column($runs, 'testcase_id');
+
+
+        $testcases = $this->em
+            ->createQueryBuilder()
+            ->from(Testcase::class, 't')
+            ->select('t')
+            ->andWhere('t.testcaseid IN (:testcaseid)')
+            ->setParameter('testcaseid', $testcaseid)
+            ->getQuery()
+            ->getArrayResult();
 
         $oldResult = $judging->getResult();
+        $groupsId = array_column($testcases, 'testgroupid');
+        // For partial scoring we have to evaluate all test cases (so enable lazy_eval by default)
 
-        $lazyEval = DOMJudgeService::EVAL_LAZY;
-        if (($result = SubmissionService::getFinalResult($runresults, $resultsPrio)) !== null) {
+        if (($result = SubmissionService::getFinalResult($runresults, $resultsPrio, $groupsId)) !== null) {
             // Lookup global lazy evaluation of results setting and possible problem specific override.
             $lazyEval    = $this->config->get('lazy_eval_results');
             $problemLazy = $judging->getSubmission()->getContestProblem()->getLazyEvalResults();

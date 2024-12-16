@@ -2,19 +2,18 @@
 namespace App\Entity;
 
 use Doctrine\Common\Collections\ArrayCollection;
-use Doctrine\Common\Collections\Collection;     
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use JMS\Serializer\Annotation as Serializer;
 
-#[ORM\Entity]       
+#[ORM\Entity]
 #[ORM\Table(options: [
     'collation' => 'utf8mb4_unicode_ci',
-    'charset' => 'utf8mb4',     
+    'charset' => 'utf8mb4',
     'comment' => 'Stores testgroup per problem',
 ])]
 
-//TODO ADD A RANK TO THE TEST GROUPS ....
-class TestGroup 
+class TestGroup
 {
     #[ORM\Column(nullable: false, options: ['comment' => 'testgroup name'])]
     #[Serializer\Exclude]
@@ -34,17 +33,17 @@ class TestGroup
 
     #[ORM\Column(options: ['comment' => 'testgroup aggregation'])]
 	private ?string $aggregation;
-    
+
 	#[ORM\ManyToOne(inversedBy: 'test_group')]
     #[ORM\JoinColumn(name: 'probid', referencedColumnName: 'probid', onDelete: 'CASCADE')]
     #[Serializer\Exclude]
     private ?Problem $problem = null;
 
-    public function __construct() 
+    public function __construct()
     {
         $this->testcases = new ArrayCollection();
     }
-    
+
 
     public function getTestGroupId(): ?int
     {

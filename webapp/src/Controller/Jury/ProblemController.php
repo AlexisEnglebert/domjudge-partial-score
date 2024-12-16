@@ -807,7 +807,7 @@ class ProblemController extends BaseController
             ->getQuery()
             ->getResult();
 
-            $tgTestCases[$group->getTestGroupId()] = array_map(fn($data) => $data[0], $td);
+            $tgTestCases[$group->getName()] = array_map(fn($data) => $data[0], $td);
         }
 
         $data = [

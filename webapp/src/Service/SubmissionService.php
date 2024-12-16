@@ -302,7 +302,7 @@ class SubmissionService
      * @param array<string|null> $runresults
      * @param array<string, int> $resultsPrio
      */
-    public static function getFinalResult(array $runresults, array $resultsPrio): ?string
+    public static function getFinalResult(array $runresults, array $resultsPrio, array $groupIds): ?string
     {
         // Whether we have NULL results.
         $haveNullResult = false;
@@ -311,7 +311,12 @@ class SubmissionService
         $bestRunResult = null;
         $bestPriority  = -1;
 
-        foreach ($runresults as $runresult) {
+        $testGroupResult = array();
+        $testGroupPriority = array();
+
+        for ($i = 0; $i < sizeof($runresults); $i++) {
+            $group = $groupIds[$i];
+            $runresult = $runresults[$i];
             if ($runresult === null) {
                 $haveNullResult = true;
                 break;
@@ -324,19 +329,33 @@ class SubmissionService
                     $bestRunResult = $runresult;
                     $bestPriority  = $priority;
                 }
+
+
+                // Store result into the testgroup
+                if (!array_key_exists($group, $testGroupResult)) {
+                    $testGroupResult += [$group => $runresult];
+                    $testGroupPriority += [$group => $priority];
+                } else {
+                    if ($priority > $testGroupPriority[$group]){
+                        $testGroupResult[$group] = $runresult;
+                        $testGroupPriority[$group] = $priority;
+                    }
+                }
             }
         }
 
-        // If we have NULL results, check whether the highest priority
-        // result has maximal priority. Use a local copy of the
-        // 'resultsPrio' array, keeping the original untouched.
-        $tmp = $resultsPrio;
-        rsort($tmp);
-        $maxPriority = reset($tmp);
-
-        // No highest priority result found: no final answer yet.
-        if ($haveNullResult && $bestPriority < $maxPriority) {
+        // For Partial scoring we can't have null result
+        if ($haveNullResult) {
             return null;
+        }
+
+        rsort($testGroupPriority);
+        $worstPriority = reset($testGroupPriority);
+        $bestPriority = end($testGroupPriority);
+
+        // Check for partially accepted (at least one of the test groups is accepted)
+        if ($bestPriority == $resultsPrio['correct'] && $worstPriority != $resultsPrio['correct']) {
+            return 'partially-accepted';
         }
 
         return $bestRunResult;
@@ -781,7 +800,7 @@ class SubmissionService
     {
         /** @var SubmissionFile[] $files */
         $files = $submission->getFiles();
-        
+
         if (count($files) !== 1) {
             throw new ServiceUnavailableHttpException(null, 'Submission does not contain exactly one file.');
         }
