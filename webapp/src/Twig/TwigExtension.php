@@ -526,6 +526,9 @@ class TwigExtension extends AbstractExtension implements GlobalsInterface
             case 'correct':
                 $style = 'sol_correct';
                 break;
+            case 'partially-accepted':
+                $style = 'sol_partially_accepted';
+                break;
             default:
                 $style = 'sol_incorrect';
         }

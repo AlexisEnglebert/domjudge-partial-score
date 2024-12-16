@@ -76,6 +76,7 @@ a {
 }
 
 .sol_correct, .compile-successful     { color: green;  }
+.sol_partially_accepted               { color : orange; }
 .sol_incorrect, .compile-unsuccessful { color: red;    }
 .sol_queued       { color: gray;   }
 
