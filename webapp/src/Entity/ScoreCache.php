@@ -40,6 +40,12 @@ class ScoreCache
     ])]
     private bool $is_correct_restricted = false;
 
+    #[ORM\Column(options: [
+        'comment' => 'Has there been a partially accepted submission? (restricted audience)',
+        'default' => 0,
+    ])]
+    private bool $is_partially_accepted_restricted = false;
+
     #[ORM\Column(
         type: 'decimal',
         precision: 32,
@@ -71,8 +77,18 @@ class ScoreCache
     ])]
     private int $pending_public = 0;
 
+    #[ORM\Column(options: [
+        'comment' => 'Score',
+        'unsigned' => true,
+        'default' => 0,
+    ])]
+    private int $score = 0;
+
     #[ORM\Column(options: ['comment' => 'Has there been a correct submission? (public)', 'default' => 0])]
     private bool $is_correct_public = false;
+
+    #[ORM\Column(options: ['comment' => 'Has there been a partially accepted submission? (public)', 'default' => 0])]
+    private bool $is_partially_accepted_public = false;
 
     #[ORM\Column(
         type: 'decimal',
@@ -197,6 +213,28 @@ class ScoreCache
         return $this->is_correct_public;
     }
 
+    public function setIsPartiallyAcceptedPublic(bool $isPartiallyAcceptedPublic) : ScoreCache
+    {
+        $is_partially_accepted_public = $isPartiallyAcceptedPublic;
+        return $this;
+    }
+
+    public function getIsPartiallyAcceptedPublic() : bool
+    {
+        return $this->is_partially_accepted_public;
+    }
+
+    public function setIsPartiallyAcceptedRestricted(bool $isPartiallyAcceptedRestricted) : ScoreCache
+    {
+        $is_partially_accepted_restricted = $isPartiallyAcceptedRestricted;
+        return $this;
+    }
+
+    public function getIsPartiallyAcceptedRestricted() : bool
+    {
+        return $this->is_partially_accepted_restricted;
+    }
+
     public function setSolvetimePublic(string|float $solvetimePublic): ScoreCache
     {
         $this->solvetime_public = $solvetimePublic;
@@ -286,5 +324,20 @@ class ScoreCache
     public function getIsCorrect(bool $restricted): bool
     {
         return $restricted ? $this->getIsCorrectRestricted() : $this->getIsCorrectPublic();
+    }
+
+    public function getIsPartiallyAccepted(bool $restricted) : bool
+    {
+        return $restricted ? $this->getIsPartiallyAcceptedRestricted() : $this->getIsPartiallyAcceptedPublic();
+    }
+
+    public function setScore(int $newScore) : ScoreCache
+    {
+        $this->score = $newScore;
+        return $this;
+    }
+    public function getScore() : int
+    {
+        return $this->score;
     }
 }

@@ -82,6 +82,10 @@ class Judging extends BaseApiEntity
     #[Serializer\Groups([ARC::GROUP_NONSTRICT])]
     private bool $valid = true;
 
+    #[ORM\Column(
+        options: ['comment' => ' The score of a judging', 'default' => 0]
+    )]
+    private int $score = 0;
     /**
      * @var resource|null
      */
@@ -505,5 +509,15 @@ class Judging extends BaseApiEntity
     {
         $this->compile_metadata = $compile_metadata;
         return $this;
+    }
+
+    public function setScore(int $newScore) : self
+    {
+        $this->score = $newScore;
+        return $this;
+    }
+    public function getScore() : int
+    {
+        return $this->score;
     }
 }

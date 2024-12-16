@@ -268,6 +268,7 @@ img.affiliation-logo {
 
 .score_correct             { background: #60e760; }
 .score_correct.score_first { background: #1daa1d; }
+.score_partially_accepted  { background: orange;  }
 .score_incorrect           { background: #e87272; }
 .score_pending             { background: #6666ff; }
 

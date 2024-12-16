@@ -252,6 +252,8 @@
                                 {% set scoreCssClass = scoreCssClass ~ ' score_first' %}
                             {% endif %}
                         {% endif %}
+                    {% elseif matrixItem.isPartiallyAccepted %}
+                        {% set scoreCssClass = 'score_partially_accepted' %}
                     {% elseif showPending and matrixItem.numSubmissionsPending > 0 %}
                         {% set scoreCssClass = 'score_pending' %}
                     {% elseif matrixItem.numSubmissions > 0 %}
@@ -270,18 +272,8 @@
 
                     {# If correct, print time scored. The format will vary depending on the scoreboard resolution setting #}
                     {% set time = '' %}
-                    {% if matrixItem.isCorrect %}
-                        {% set time = matrixItem.time %}
-                        {% if scoreboard.getRuntimeAsScoreTiebreaker() %}
-                            {% set time = "%0.3f s" | format(matrixItem.runtime / 1000.0) %}
-                        {% elseif scoreInSeconds %}
-                            {% set time = time | scoreTime | printTimeRelative %}
-                            {% if matrixItem.numSubmissions > 1 %}
-                                {% set time = time ~ ' + ' ~ (calculatePenaltyTime(true, matrixItem.numSubmissions) | printTimeRelative) %}
-                            {% endif %}
-                        {% else %}
-                            {% set time = time | scoreTime %}
-                        {% endif %}
+                    {% if matrixItem.isPartiallyAccepted or matrixItem.isCorrect %}
+                        {% set time = matrixItem.score %}
                     {% endif %}
 
                     {% set link = null %}
@@ -294,7 +286,7 @@
                         {% if numSubmissions != '0' %}
                             <a {% if link %}href="{{ link }}"{% endif %}>
                                 <div class="{{ scoreCssClass }}">
-                                    {% if matrixItem.isCorrect %}{{ time }}{% else %}&nbsp;{% endif %}
+                                    {% if matrixItem.isCorrect or matrixItem.isPartiallyAccepted %}{{ time }}{% else %}&nbsp;{% endif %}
                                     <span>
                                         {% if numSubmissions is same as(1) %}
                                             1 try

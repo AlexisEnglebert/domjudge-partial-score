@@ -154,6 +154,8 @@ class Scoreboard
             $this->matrix[$teamId][$probId] = new ScoreboardMatrixItem(
                 isCorrect: $scoreRow->getIsCorrect($this->restricted),
                 isFirst: $scoreRow->getIsCorrect($this->restricted) && $scoreRow->getIsFirstToSolve(),
+                isPartiallyAccepted: $scoreRow->getIsPartiallyAccepted($this->restricted),
+                score: $scoreRow->getScore(),
                 numSubmissions: $scoreRow->getSubmissions($this->restricted),
                 numSubmissionsPending: $scoreRow->getPending($this->restricted),
                 time: $scoreRow->getSolveTime($this->restricted),
@@ -220,11 +222,14 @@ class Scoreboard
                     $this->matrix[$teamId][$problemId] = new ScoreboardMatrixItem(
                         isCorrect: false,
                         isFirst: false,
+                        isPartiallyAccepted : false,
                         numSubmissions: 0,
                         numSubmissionsPending: 0,
                         time: 0,
                         penaltyTime: 0,
-                        runtime: 0);
+                        runtime: 0,
+                        score: 0,
+                    );
                 }
 
                 $problemMatrixItem = $this->matrix[$teamId][$problemId];

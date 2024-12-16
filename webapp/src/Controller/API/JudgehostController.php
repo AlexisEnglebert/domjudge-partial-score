@@ -20,6 +20,7 @@ use App\Entity\Submission;
 use App\Entity\SubmissionFile;
 use App\Entity\TestcaseContent;
 use App\Entity\Testcase;
+use App\Entity\TestGroup;
 use App\Entity\Version;
 use App\Service\BalloonService;
 use App\Service\ConfigurationService;
@@ -280,6 +281,7 @@ class JudgehostController extends AbstractFOSRestController
             )
         )
     )]
+    //TODO DOIS-JE MODIFIER ÇA ?
     public function updateJudgingAction(
         Request $request,
         #[OA\PathParameter(description: 'The hostname of the judgehost that wants to update the judging')]
@@ -1004,7 +1006,7 @@ class JudgehostController extends AbstractFOSRestController
         $runresults = array_column($runs, 'runresult');
         $testcaseid = array_column($runs, 'testcase_id');
 
-
+        // Retrieves each test cases
         $testcases = $this->em
             ->createQueryBuilder()
             ->from(Testcase::class, 't')
@@ -1015,6 +1017,8 @@ class JudgehostController extends AbstractFOSRestController
             ->getArrayResult();
 
         $oldResult = $judging->getResult();
+        $oldScore = $judging->getScore();
+
         $groupsId = array_column($testcases, 'testgroupid');
         // For partial scoring we have to evaluate all test cases (so enable lazy_eval by default)
 
@@ -1043,8 +1047,25 @@ class JudgehostController extends AbstractFOSRestController
                 $this->maybeUpdateActiveJudging($judging);
                 $sendJudgingEvent = true;
             }
-            $this->em->flush();
 
+
+            // No null result then compute the problem score
+
+            $testGroups = $this->em
+            ->createQueryBuilder()
+            ->from(TestGroup::class, 'tg')
+            ->select('tg')
+            ->andWhere('tg.testGroupId IN (:groupsId)')
+            ->setParameter('groupsId', $groupsId)
+            ->getQuery()
+            ->getArrayResult();
+
+
+            $testGroupsScore = array_column($testGroups, "score", "testGroupId");
+            $score = SubmissionService::getFinalScore($testGroupsScore, $resultsPrio, $runresults, $groupsId);
+            $judging->setScore($score);
+
+            $this->em->flush();
             // Only update if the current result is different from what we had before.
             // This should only happen when the old result was NULL.
             if ($oldResult !== $result) {

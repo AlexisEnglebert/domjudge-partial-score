@@ -239,7 +239,7 @@ class ScoreboardService
     }
 
     /**
-     * Scoreboard calculation
+     * Scoreboard calculation // TODO CHANGE THIS FOR PARTIAL SCORING
      *
      * Given a contest, team and a problem (re)calculate the values for one
      * row in the scoreboard.
@@ -287,6 +287,7 @@ class ScoreboardService
         // that these will not count as solved. Correct submissions with
         // submittime after contest end should never happen, unless one
         // resets the contest time after successful judging.
+        //TODO ON A TOUTES LES SOUMISSION SORT PAR LE SUMBIT TIME
         $queryBuilder = $this->em->createQueryBuilder()
             ->from(Submission::class, 's')
             ->select('s, c')
@@ -319,14 +320,18 @@ class ScoreboardService
         $submissions = $queryBuilder->getQuery()->getResult();
 
         $verificationRequired = $this->config->get('verification_required');
+        // TODO ICI QUE TOUT VAS SE JOUER (CALCULER ETC...)
 
         // Initialize variables.
-        $submissionsJury = $pendingJury = $timeJury = 0;
-        $submissionsPubl = $pendingPubl = $timePubl = 0;
-        $correctJury     = false;
-        $correctPubl     = false;
-        $runtimeJury     = PHP_INT_MAX;
-        $runtimePubl     = PHP_INT_MAX;
+        $submissionsJury        = $pendingJury = $timeJury = 0;
+        $submissionsPubl        = $pendingPubl = $timePubl = 0;
+        $correctJury            = false;
+        $partiallyAcceptedJury  = false;
+        $partiallyAcceptedPublic= false;
+        $correctPubl            = false;
+        $runtimeJury            = PHP_INT_MAX;
+        $runtimePubl            = PHP_INT_MAX;
+        $problemScore           = 0;
 
         foreach ($submissions as $submission) {
             /** @var Judging|ExternalJudgement|null $judging */
@@ -411,7 +416,17 @@ class ScoreboardService
                     $correctPubl = true;
                     $timePubl    = $submitTime;
                 }
+                $problemScore = $judging->getScore();
+            }else if ($judging->getResult() == 'partially-accepted') {
+                $partiallyAcceptedJury = true;
+                if(!$submission->isAfterFreeze()) {
+                    $partiallyAcceptedPublic = true;
+                }
+
+                $problemScore = max($judging->getScore(), $problemScore);
             }
+
+
         }
 
         // See if this submission was the first to solve this problem.
@@ -482,13 +497,16 @@ class ScoreboardService
             'runtimePublic' => $runtimePubl === PHP_INT_MAX ? 0 : $runtimePubl,
             'isCorrectPublic' => (int)$correctPubl,
             'isFirstToSolve' => (int)$firstToSolve,
+            'isPaPublic'    => (int)$partiallyAcceptedPublic,
+            'isPaJury'      => (int)$partiallyAcceptedJury,
+            'problemScore'  => (int)$problemScore,
         ];
         $this->em->getConnection()->executeQuery('REPLACE INTO scorecache
             (cid, teamid, probid,
              submissions_restricted, pending_restricted, solvetime_restricted, runtime_restricted, is_correct_restricted,
-             submissions_public, pending_public, solvetime_public, runtime_public, is_correct_public, is_first_to_solve)
+             submissions_public, pending_public, solvetime_public, runtime_public, is_correct_public, is_first_to_solve, is_partially_accepted_restricted, is_partially_accepted_public, score)
             VALUES (:cid, :teamid, :probid, :submissionsRestricted, :pendingRestricted, :solvetimeRestricted, :runtimeRestricted, :isCorrectRestricted,
-            :submissionsPublic, :pendingPublic, :solvetimePublic, :runtimePublic, :isCorrectPublic, :isFirstToSolve)', $params);
+            :submissionsPublic, :pendingPublic, :solvetimePublic, :runtimePublic, :isCorrectPublic, :isFirstToSolve, :isPaPublic, :isPaJury, :problemScore)', $params);
 
         if ($this->em->getConnection()->fetchOne('SELECT RELEASE_LOCK(:lock)',
                                                     ['lock' => $lockString]) != 1) {

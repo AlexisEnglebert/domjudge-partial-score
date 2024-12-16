@@ -301,6 +301,7 @@ class SubmissionService
      * only occur when not all testcases have been run yet.
      * @param array<string|null> $runresults
      * @param array<string, int> $resultsPrio
+     * @param array<int> $groupsId
      */
     public static function getFinalResult(array $runresults, array $resultsPrio, array $groupIds): ?string
     {
@@ -359,6 +360,63 @@ class SubmissionService
         }
 
         return $bestRunResult;
+    }
+
+
+    /**
+     * Determines final score for a judging given an ordered array of
+     * judging runs. Runs can be NULL if not run yet. A return value of
+     * NULL means that a final score cannot be determined yet; this may
+     * only occur when not all testcases have been run yet.
+     * @param array<int, int> $testGroupScore
+     * @param array<string, int> $resultsPrio
+     * @param array<string|null> $runresults
+     * @param array<int> $groupsId
+     */
+    public static function getFinalScore(array $testGroupScore, array $resultsPrio, array $runresults, array $groupIds): ?int
+    {
+        // Whether we have NULL results.
+        $haveNullResult = false;
+
+        $testGroupPriority = array();
+
+        for ($i = 0; $i < sizeof($runresults); $i++) {
+            $group = $groupIds[$i];
+            $runresult = $runresults[$i];
+            if ($runresult === null) {
+                $haveNullResult = true;
+                break;
+            } else {
+                $priority = $resultsPrio[$runresult];
+                if (empty($priority)) {
+                    throw new InvalidArgumentException(sprintf("Unknown results '%s' found", $runresult));
+                }
+
+                // Store result into the testgroup
+                if (!array_key_exists($group, $testGroupPriority)) {
+                    $testGroupPriority += [$group => $priority];
+                } else {
+                    if ($priority > $testGroupPriority[$group]){
+                        $testGroupPriority[$group] = $priority;
+                    }
+                }
+            }
+        }
+
+        // For Partial scoring we can't have null result
+        if ($haveNullResult) {
+            return null;
+        }
+
+        $finalScore = 0;
+        // For each correct test group sum the score
+        foreach($testGroupPriority as $key => $value) {
+            if ($value == $resultsPrio['correct']) {
+                $finalScore += $testGroupScore[$key];
+            }
+        }
+
+        return $finalScore;
     }
 
     /**

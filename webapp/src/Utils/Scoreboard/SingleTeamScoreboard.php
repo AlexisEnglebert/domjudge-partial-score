@@ -64,6 +64,8 @@ class SingleTeamScoreboard extends Scoreboard
 
             $this->matrix[$scoreRow->getTeam()->getTeamid()][$scoreRow->getProblem()->getProbid()] = new ScoreboardMatrixItem(
                 isCorrect: $scoreRow->getIsCorrect($this->restricted),
+                isPartiallyAccepted: $scoreRow->getIsPartiallyAccepted($this->restricted),
+                score: $scoreRow->getScore(),
                 isFirst: $scoreRow->getIsCorrect($this->showRestrictedFts) && $scoreRow->getIsFirstToSolve(),
                 numSubmissions: $scoreRow->getSubmissions($this->restricted),
                 numSubmissionsPending: $scoreRow->getPending($this->restricted),
@@ -82,12 +84,15 @@ class SingleTeamScoreboard extends Scoreboard
             if (!isset($this->matrix[$teamId][$problemId])) {
                 $this->matrix[$teamId][$problemId] = new ScoreboardMatrixItem(
                     isCorrect: false,
+                    isPartiallyAccepted: false,
                     isFirst: false,
                     numSubmissions: 0,
                     numSubmissionsPending: 0,
                     time: 0,
                     penaltyTime: 0,
-                    runtime: 0);
+                    runtime: 0,
+                    score: 0,
+                );
             }
         }
     }
