@@ -22,7 +22,7 @@
         <p class="nodata">No testcase(s) yet.</p>
     {% else %}
         {% for key, value in tgTestCases %}
-            <h2> Test group {{key}} </h2>
+            <h2> {{key}} </h2>
             {% if value is empty %}
                  <p class="nodata">No testcase(s) yet.</p>
             {% else %}
