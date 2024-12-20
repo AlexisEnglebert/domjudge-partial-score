@@ -52,6 +52,12 @@ class RankCache
     #[ORM\Column(options: ['comment' => 'Total runtime in milliseconds (public)', 'default' => 0])]
     private int $totalruntime_public = 0;
 
+    #[ORM\Column(options: ['comment' => 'Total score (public)', 'default' => 0])]
+    private int $totalscore_public = 0;
+
+    #[ORM\Column(options: ['comment' => 'Total score (restricted)', 'default' => 0])]
+    private int $totalscore_restricted = 0;
+
     #[ORM\Id]
     #[ORM\ManyToOne]
     #[ORM\JoinColumn(name: 'cid', referencedColumnName: 'cid', onDelete: 'CASCADE')]
@@ -72,6 +78,18 @@ class RankCache
     {
         return $this->points_restricted;
     }
+
+    public function getScoreRestricted(): int
+    {
+        return $this->totalscore_restricted;
+    }
+
+    public function setScoreRestricted(int $newScoreRestricted): RankCache
+    {
+        $this->totalscore_restricted = $newScoreRestricted;
+        return $this;
+    }
+
 
     public function setTotaltimeRestricted(int $totaltimeRestricted): RankCache
     {
@@ -104,6 +122,17 @@ class RankCache
     public function getPointsPublic(): int
     {
         return $this->points_public;
+    }
+
+    public function getScorePublic(): int
+    {
+        return $this->totalscore_public;
+    }
+
+    public function setScorePublic(int $newScorePublic): RankCache
+    {
+        $this->totalscore_public = $newScorePublic;
+        return $this;
     }
 
     public function setTotaltimePublic(int $totaltimePublic): RankCache

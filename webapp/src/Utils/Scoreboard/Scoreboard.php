@@ -136,7 +136,7 @@ class Scoreboard
     {
         // Calculate matrix and update scores.
         $this->matrix = [];
-        foreach ($this->scoreCache as $scoreRow) {
+        foreach ($this->scoreCache as $scoreRow) { // Iterate trough each problem
             $teamId = $scoreRow->getTeam()->getTeamid();
             $probId = $scoreRow->getProblem()->getProbid();
             // Skip this row if the team or problem is not known by us.
@@ -164,12 +164,13 @@ class Scoreboard
                 numSubmissionsInFreeze: $scoreRow->getPending(false),
             );
 
-            if ($scoreRow->getIsCorrect($this->restricted)) {
+            if ($scoreRow->getIsCorrect($this->restricted) || $scoreRow->getIsPartiallyAccepted($this->restricted)) {
                 $solveTime      = Utils::scoretime($scoreRow->getSolveTime($this->restricted),
                                                    $this->scoreIsInSeconds);
                 $contestProblem = $this->problems[$scoreRow->getProblem()->getProbid()];
                 $this->scores[$teamId]->numPoints += $contestProblem->getPoints();
                 $this->scores[$teamId]->solveTimes[] = $solveTime;
+                $this->scores[$teamId]->totalProblemScore += $scoreRow->getScore();
                 $this->scores[$teamId]->totalTime += $solveTime + $penalty;
                 $this->scores[$teamId]->totalRuntime += $scoreRow->getRuntime($this->restricted);
             }
@@ -292,12 +293,21 @@ class Scoreboard
      * - least amount of total time spent on these solutions; (or lowest total runtime)
      * - the tie-breaker function below.
      */
+
+     /**
+      * Main score comparison for Partial Scoring, called from the 'scoreboardCompare' wrapper
+      * Scores based on the following criteria:
+      *
+      */
+      //TODO GÉRER LES EQ DE SCORE
     protected function scoreCompare(TeamScore $a, TeamScore $b): int
     {
-        // More correctness points than someone else means higher rank.
-        if ($a->numPoints != $b->numPoints) {
-            return $b->numPoints <=> $a->numPoints;
+        //throw new Exception(sprintf("%d %d", $a->totalProblemScore, $b->totalProblemScore));
+        // More score means higher rank !
+        if ($a->totalProblemScore != $b->totalProblemScore) {
+            return $b->totalProblemScore <=> $a->totalProblemScore;
         }
+
         // Else, less time spent means higher rank.
         if ($this->getRuntimeAsScoreTiebreaker()) { // runtime ordering
             if ($a->totalRuntime != $b->totalRuntime) {

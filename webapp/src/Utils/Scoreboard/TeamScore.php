@@ -13,6 +13,7 @@ class TeamScore
     public int $rank = 0;
     public int $totalTime;
     public int $totalRuntime = 0;
+    public int $totalProblemScore = 0;
 
     public function __construct(public Team $team)
     {

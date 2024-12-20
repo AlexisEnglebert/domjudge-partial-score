@@ -584,6 +584,7 @@ class ScoreboardService
             ->getResult();
 
         // Process all score cache rows.
+        //TODO MODIFIER ÇA
         foreach ($scoreCacheRows as $scoreCache) {
             foreach ($variants as $variant => $isRestricted) {
                 $probId = $scoreCache->getProblem()->getProbid();

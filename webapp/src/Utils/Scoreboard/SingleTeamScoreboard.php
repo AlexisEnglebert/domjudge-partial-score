@@ -46,6 +46,7 @@ class SingleTeamScoreboard extends Scoreboard
             $teamScore->numPoints += $this->rankCache->getPointsRestricted();
             $teamScore->totalTime += $this->rankCache->getTotaltimeRestricted();
             $teamScore->totalRuntime += $this->rankCache->getTotalruntimeRestricted();
+            //$teamScore->totalProblemScore += $this->rankCache->get
         }
         $teamScore->rank = $this->teamRank;
 
