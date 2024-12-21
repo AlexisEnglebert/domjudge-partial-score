@@ -85,6 +85,7 @@ class TwigExtension extends AbstractExtension implements GlobalsInterface
             new TwigFilter('printYesNo', $this->printYesNo(...)),
             new TwigFilter('printSize', Utils::printSize(...), ['is_safe' => ['html']]),
             new TwigFilter('testcaseResults', $this->testcaseResults(...), ['is_safe' => ['html']]),
+            new TwigFilter('testcaseTestgroupResults', $this->testcaseTestgroupResults(...), ['is_safe' => ['html']]),
             new TwigFilter('displayTestcaseResults', $this->displayTestcaseResults(...),
                            ['is_safe' => ['html']]),
             new TwigFilter('externalCcsUrl', $this->externalCcsUrl(...)),
@@ -365,7 +366,144 @@ class TwigExtension extends AbstractExtension implements GlobalsInterface
 
         return '';
     }
+    public function testcaseTestgroupResults(Submission $submission, ?bool $showExternal = false) : string
+    {
+        if ($showExternal) {
+            /** @var ExternalJudgement|null $externalJudgement */
+            $externalJudgement   = $submission->getExternalJudgements()->first() ?: null;
+            $externalJudgementId = $externalJudgement?->getExtjudgementid();
+            $probId              = $submission->getProblem()->getProbid();
+            $testcases           = $this->em->getConnection()->fetchAllAssociative(
+                'SELECT er.result as runresult, t.ranknumber, t.description, t.sample
+                FROM testcase t
+                LEFT JOIN external_run er ON (er.testcaseid = t.testcaseid
+                                            AND er.extjudgementid = :extjudgementid)
+                WHERE t.probid = :probid ORDER BY ranknumber',
+                ['extjudgementid' => $externalJudgementId, 'probid' => $probId]);
 
+            $submissionDone = $externalJudgement && !empty($externalJudgement->getEndtime());
+        } else {
+            /** @var Judging|bool $judging */
+            $judging   = $submission->getJudgings()->first();
+            $judgingId = $judging ? $judging->getJudgingid() : null;
+            $probId    = $submission->getProblem()->getProbid();
+            $testcases = $this->em->getConnection()->fetchAllAssociative(
+                'SELECT r.runresult, jh.hostname, jt.valid, t.ranknumber, t.description, t.sample, t.testgroupid
+                FROM testcase t
+                LEFT JOIN judging_run r ON (r.testcaseid = t.testcaseid
+                                            AND r.judgingid = :judgingid)
+                LEFT JOIN judgetask jt ON (r.judgetaskid = jt.judgetaskid)
+                LEFT JOIN judgehost jh on (jt.judgehostid = jh.judgehostid)
+                WHERE t.probid = :probid ORDER BY ranknumber',
+                ['judgingid' => $judgingId, 'probid' => $probId]);
+
+            $testGroupIds = array_unique(array_column($testcases, "testgroupid"));
+            $testgroups = $this->em->getConnection()->fetchAllAssociative(
+                'SELECT * FROM test_group t WHERE t.test_group_id IN (:testGroupsId)',
+            ['testGroupsId' => $testGroupIds], ['testGroupsId' => \Doctrine\DBAL\Connection::PARAM_INT_ARRAY]);
+
+            $testGroupsMapping = array_column($testgroups, "name", "test_group_id");
+            $submissionDone = $judging && !empty($judging->getEndtime());
+        }
+
+        foreach ($testgroups as $testgroup) {
+            $testGroupsMapping[$testgroup['test_group_id']] = $testgroup;
+        }
+
+        usort($testcases, function ($a, $b) {
+            return intval($a['testgroupid']) <=> intval($b['testgroupid']);
+        });
+
+
+        $current_test_group = -1;
+        $results = '';
+        $lastTypeSample = true;
+
+        // Little hacky code here for the karwa the resolut prio will always be (7 - accepted, 0 - pending)//
+
+        $current_priority = 99;
+        $priorityMapper = ['correct' => 7, 'wrong-answer' => 5, 'timelimit' => 6, 'run-error' => 3, 'compiler-error' => 2, 'no-output' => 4];
+        $priorityToText = [7 => 'correct', 5 => 'wrong-answer', 6 => 'timelimit', 3 => 'run-error', 2 => 'compiler-error', 4 => 'no-output', 0 => 'pending', -1 => 'invalid'];
+
+        function getStyle($id) {
+            switch ($id) {
+                case 7:
+                    return "sol_correct";
+                case 0:
+                    return "sol_queued";
+                default:
+                    return "sol_incorrect";
+            }
+        }
+
+        $results .= '<table class="table">';
+        $results .= '<thead><tr> <th scope="col">Groups</th> <th scope="col">Score</th> <th scope="col">Runs</th> <th scope="col">Result</th> </tr></thead>';
+        $results .= '<tbody>';
+
+        foreach ($testcases as $key => $testcase) {
+            if ($testcase["testgroupid"] != $current_test_group) {
+
+                if($current_test_group != -1) {
+                    //
+                    $results .= '</td>';
+                    $results .=  sprintf('<td> <span class="sol %s"> %s </span> </td>', getStyle($current_priority), $priorityToText[$current_priority]);
+                    $results .= '</tr>';
+                    $current_priority = 99;
+                }
+                $current_test_group = $testcase["testgroupid"];
+
+                $currentTestGroup = $testGroupsMapping[intval($testcase["testgroupid"])];
+
+                $results .= sprintf('<tr> <td>%s</td> <td> %s </td>', $currentTestGroup['name'], $currentTestGroup['score']);
+                $results .= '<td>';
+            }
+
+
+            $class = $submissionDone ? 'secondary' : 'primary';
+            $text  = '?';
+
+            if ($testcase['runresult'] !== null) {
+                $text  = substr($testcase['runresult'], 0, 1);
+                $class = 'danger';
+                if ($testcase['runresult'] === Judging::RESULT_CORRECT) {
+                    $text  = '✓';
+                    $class = 'success';
+                    if ($current_priority == 99) {
+                        $current_priority = $priorityMapper[$testcase['runresult']];
+                    }
+                }else {
+                    if ($current_priority != 0) {
+                        $current_priority = min($current_priority, $priorityMapper[$testcase['runresult']]);
+                    }
+                }
+            } elseif (array_key_exists('valid', $testcase) && !$testcase['valid']) {
+                $text = '✕';
+                $current_priority = -1;
+
+            } elseif (array_key_exists('hostname', $testcase) && $testcase['hostname'] !== null) {
+                $text  = '↺';
+                $class = 'info';
+                $current_priority = 0;
+            }
+
+            if (!empty($testcase['description'])) {
+                $title = sprintf('Run %d: %s', $key + 1,
+                                htmlspecialchars($testcase['description']));
+            } else {
+                $title = sprintf('Run %d', $key + 1);
+            }
+
+            $results .= sprintf('<span class="badge text-bg-%s badge-testcase" title="%s">%s</span>', $class, $title, $text);
+        }
+        $results .= '</td>';
+        $results .=  sprintf('<td> <span class="sol %s"> %s </span> </td>', getStyle($current_priority), $priorityToText[$current_priority]);
+        $results .= '</tr>';
+        $current_priority = 99;
+
+        // todo do not forget to add las info
+        $results .= '</tbody>';
+        return $results;
+    }
     public function testcaseResults(Submission $submission, ?bool $showExternal = false): string
     {
         // We use a direct SQL query here for performance reasons

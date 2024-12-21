@@ -59,7 +59,7 @@ class SingleTeamScoreboard extends Scoreboard
             }
 
             $penalty = Utils::calcPenaltyTime(
-                $scoreRow->getIsCorrect($this->restricted), $scoreRow->getSubmissions($this->restricted),
+                $scoreRow->getIsCorrect($this->restricted) || $scoreRow->getIsPartiallyAccepted($this->restricted), $scoreRow->getSubmissions($this->restricted),
                 $this->penaltyTime, $this->scoreIsInSeconds
             );
 

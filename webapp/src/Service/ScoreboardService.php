@@ -589,7 +589,7 @@ class ScoreboardService
             foreach ($variants as $variant => $isRestricted) {
                 $probId = $scoreCache->getProblem()->getProbid();
                 if (isset($contestProblems[$probId]) && $scoreCache->getIsCorrect($isRestricted)) {
-                    $penalty = Utils::calcPenaltyTime($scoreCache->getIsCorrect($isRestricted),
+                    $penalty = Utils::calcPenaltyTime($scoreCache->getIsCorrect($isRestricted) || $scoreCache->getIsPartiallyAccepted($isRestricted),
                                                       $scoreCache->getSubmissions($isRestricted),
                                                       $penaltyTime, $scoreIsInSeconds);
 

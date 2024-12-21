@@ -230,11 +230,7 @@
             {% if enable_ranking %}
                 {% set totalPoints = score.numPoints %}
                 <td class="scorenc">{{ totalPoints }}</td>
-                {% if scoreboard.getRuntimeAsScoreTiebreaker() %}
-                    <td class="scorett">{{ "%0.3f s" | format(score.totalRuntime/1000.0) }}</td>
-                {% else %}
-                    <td class="scorett">{{ totalTime }}</td>
-                {% endif %}
+                <td class="scorett">{{ totalTime }}</td>
             {% endif %}
 
             {% if showTeamSubmissions or jury %}
@@ -354,9 +350,9 @@
 
     {% if showTeamSubmissions or jury %}
         {% if scoreboard.getRuntimeAsScoreTiebreaker() %}
-            {% set cellColors = {first: 'Solved, fastest', correct: 'Solved', incorrect: 'Tried, incorrect', pending: 'Tried, pending', neutral: 'Untried'} %}
+            {% set cellColors = {first: 'Solved, fastest', correct: 'Solved', incorrect: 'Tried, incorrect', pending: 'Tried, pending', neutral: 'Untried', partially_accepted: "Partially accepted"} %}
         {% else %}
-            {% set cellColors = {first: 'Solved first', correct: 'Solved', incorrect: 'Tried, incorrect', pending: 'Tried, pending', neutral: 'Untried'} %}
+            {% set cellColors = {first: 'Solved first', correct: 'Solved', incorrect: 'Tried, incorrect', pending: 'Tried, pending', neutral: 'Untried', partially_accepted: "Partially accepted"} %}
         {% endif %}
         <table id="cell_legend" class="scoreboard scorelegend {% if jury %}scoreboard_jury{% endif %}">
             <thead>

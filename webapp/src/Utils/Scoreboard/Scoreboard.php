@@ -146,7 +146,7 @@ class Scoreboard
             }
 
             $penalty = Utils::calcPenaltyTime(
-                $scoreRow->getIsCorrect($this->restricted),
+                $scoreRow->getIsCorrect($this->restricted) || $scoreRow->getIsPartiallyAccepted($this->restricted),
                 $scoreRow->getSubmissions($this->restricted),
                 $this->penaltyTime, $this->scoreIsInSeconds
             );
