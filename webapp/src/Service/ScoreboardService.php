@@ -117,6 +117,7 @@ class ScoreboardService
      * @throws NoResultException
      * @throws NonUniqueResultException
      */
+    //TODO FIX ÇA
     public function calculateTeamRank(
         Contest $contest,
         Team $team,
@@ -320,7 +321,7 @@ class ScoreboardService
         $submissions = $queryBuilder->getQuery()->getResult();
 
         $verificationRequired = $this->config->get('verification_required');
-        // TODO ICI QUE TOUT VAS SE JOUER (CALCULER ETC...)
+        // TODO ICI QUE TOUT VAS SE JOUER (CALCULER; SCOREBOARD ETC...)
 
         // Initialize variables.
         $submissionsJury        = $pendingJury = $timeJury = 0;
@@ -514,7 +515,7 @@ class ScoreboardService
         }
 
         // If we found a new correct result, update the rank cache too.
-        if ($updateRankCache && ($correctJury || $correctPubl)) {
+        if ($updateRankCache && ($correctJury || $correctPubl || $partiallyAcceptedJury || $partiallyAcceptedPublic)) {
             $this->updateRankCache($contest, $team);
         }
     }
@@ -562,10 +563,13 @@ class ScoreboardService
         $numPoints = [];
         $totalTime = [];
         $totalRuntime = [];
+        $totalScore = [];
+
         foreach ($variants as $variant => $isRestricted) {
             $numPoints[$variant] = 0;
             $totalTime[$variant] = $team->getPenalty();
             $totalRuntime[$variant] = 0;
+            $totalScore[$variant] = 0;
         }
 
         $penaltyTime      = (int) $this->config->get('penalty_time');
@@ -599,6 +603,7 @@ class ScoreboardService
                         $scoreIsInSeconds
                     ) + $penalty;
                     $totalRuntime[$variant] += $scoreCache->getRuntime($isRestricted);
+                    $totalScore[$variant] += $scoreCache->getScore($isRestricted);
                 }
             }
         }
@@ -613,11 +618,13 @@ class ScoreboardService
             'pointsPublic' => $numPoints['public'],
             'totalTimePublic' => $totalTime['public'],
             'totalRuntimePublic' => $totalRuntime['public'],
+            'totalScorePublic' => $totalScore['public'],
+            'totalScoreRestricted' => $totalScore['restricted'],
         ];
         $this->em->getConnection()->executeQuery('REPLACE INTO rankcache (cid, teamid,
             points_restricted, totaltime_restricted, totalruntime_restricted,
-            points_public, totaltime_public, totalruntime_public)
-            VALUES (:cid, :teamid, :pointsRestricted, :totalTimeRestricted, :totalRuntimeRestricted, :pointsPublic, :totalTimePublic, :totalRuntimePublic)', $params);
+            points_public, totaltime_public, totalruntime_public, totalscore_public, totalscore_restricted)
+            VALUES (:cid, :teamid, :pointsRestricted, :totalTimeRestricted, :totalRuntimeRestricted, :pointsPublic, :totalTimePublic, :totalRuntimePublic, :totalScorePublic, :totalScoreRestricted)', $params);
 
         if ($this->em->getConnection()->fetchOne('SELECT RELEASE_LOCK(:lock)',
                                                     ['lock' => $lockString]) != 1) {

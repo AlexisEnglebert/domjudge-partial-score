@@ -78,11 +78,18 @@ class ScoreCache
     private int $pending_public = 0;
 
     #[ORM\Column(options: [
-        'comment' => 'Score',
+        'comment' => 'Public score',
         'unsigned' => true,
         'default' => 0,
     ])]
-    private int $score = 0;
+    private int $score_public = 0;
+
+    #[ORM\Column(options: [
+        'comment' => 'Restricted score',
+        'unsigned' => true,
+        'default' => 0,
+    ])]
+    private int $score_restricted = 0;
 
     #[ORM\Column(options: ['comment' => 'Has there been a correct submission? (public)', 'default' => 0])]
     private bool $is_correct_public = false;
@@ -331,13 +338,28 @@ class ScoreCache
         return $restricted ? $this->getIsPartiallyAcceptedRestricted() : $this->getIsPartiallyAcceptedPublic();
     }
 
-    public function setScore(int $newScore) : ScoreCache
+    public function setScorePublic(int $newScore) : ScoreCache
     {
-        $this->score = $newScore;
+        $this->score_public = $newScore;
         return $this;
     }
-    public function getScore() : int
+    public function setScoreRestricted(int $newScore) : ScoreCache
     {
-        return $this->score;
+        $this->score_restricted = $newScore;
+        return $this;
+    }
+    public function getScorePublic() : int
+    {
+        return $this->score_public;
+    }
+
+    public function getScoreRestricted() : int
+    {
+        return $this->score_public;
+    }
+
+    public function getScore(bool $restricted) : int
+    {
+        return $restricted ? $this->getScoreRestricted() : $this->getScorePublic();
     }
 }

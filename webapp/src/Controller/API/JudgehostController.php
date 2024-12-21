@@ -1021,7 +1021,7 @@ class JudgehostController extends AbstractFOSRestController
 
         $groupsId = array_column($testcases, 'testgroupid');
         // For partial scoring we have to evaluate all test cases (so enable lazy_eval by default)
-
+        //TODO EARLY EXIT FOR TEST GROUP OTHERWISE IT IS TOO LONG TO WAIT FOR TL SUBMISSIONS
         if (($result = SubmissionService::getFinalResult($runresults, $resultsPrio, $groupsId)) !== null) {
             // Lookup global lazy evaluation of results setting and possible problem specific override.
             $lazyEval    = $this->config->get('lazy_eval_results');

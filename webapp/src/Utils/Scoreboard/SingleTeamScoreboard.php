@@ -46,7 +46,7 @@ class SingleTeamScoreboard extends Scoreboard
             $teamScore->numPoints += $this->rankCache->getPointsRestricted();
             $teamScore->totalTime += $this->rankCache->getTotaltimeRestricted();
             $teamScore->totalRuntime += $this->rankCache->getTotalruntimeRestricted();
-            //$teamScore->totalProblemScore += $this->rankCache->get
+            $teamScore->totalProblemScore += $this->rankCache->getScoreRestricted();
         }
         $teamScore->rank = $this->teamRank;
 
@@ -66,7 +66,7 @@ class SingleTeamScoreboard extends Scoreboard
             $this->matrix[$scoreRow->getTeam()->getTeamid()][$scoreRow->getProblem()->getProbid()] = new ScoreboardMatrixItem(
                 isCorrect: $scoreRow->getIsCorrect($this->restricted),
                 isPartiallyAccepted: $scoreRow->getIsPartiallyAccepted($this->restricted),
-                score: $scoreRow->getScore(),
+                score: $scoreRow->getScore($this->restricted),
                 isFirst: $scoreRow->getIsCorrect($this->showRestrictedFts) && $scoreRow->getIsFirstToSolve(),
                 numSubmissions: $scoreRow->getSubmissions($this->restricted),
                 numSubmissionsPending: $scoreRow->getPending($this->restricted),

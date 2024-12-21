@@ -155,7 +155,7 @@ class Scoreboard
                 isCorrect: $scoreRow->getIsCorrect($this->restricted),
                 isFirst: $scoreRow->getIsCorrect($this->restricted) && $scoreRow->getIsFirstToSolve(),
                 isPartiallyAccepted: $scoreRow->getIsPartiallyAccepted($this->restricted),
-                score: $scoreRow->getScore(),
+                score: $scoreRow->getScore($this->restricted),
                 numSubmissions: $scoreRow->getSubmissions($this->restricted),
                 numSubmissionsPending: $scoreRow->getPending($this->restricted),
                 time: $scoreRow->getSolveTime($this->restricted),
@@ -170,7 +170,7 @@ class Scoreboard
                 $contestProblem = $this->problems[$scoreRow->getProblem()->getProbid()];
                 $this->scores[$teamId]->numPoints += $contestProblem->getPoints();
                 $this->scores[$teamId]->solveTimes[] = $solveTime;
-                $this->scores[$teamId]->totalProblemScore += $scoreRow->getScore();
+                $this->scores[$teamId]->totalProblemScore += $scoreRow->getScore($this->restricted);
                 $this->scores[$teamId]->totalTime += $solveTime + $penalty;
                 $this->scores[$teamId]->totalRuntime += $scoreRow->getRuntime($this->restricted);
             }
