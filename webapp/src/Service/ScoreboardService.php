@@ -417,17 +417,17 @@ class ScoreboardService
                 if (!$submission->isAfterFreeze()) {
                     $correctPubl = true;
                     $timePubl    = $submitTime;
+                    $problemScorePubl = $judging->getScore();
                 }
-                $problemScorePubl = $judging->getScore(false);
-                $problemScoreRestricted = $judging->getScore(true);
+                $problemScoreRestricted = $judging->getScore();
             }else if ($judging->getResult() == 'partially-accepted') {
                 $partiallyAcceptedJury = true;
                 if(!$submission->isAfterFreeze()) {
                     $partiallyAcceptedPublic = true;
+                    $problemScorePubl = max($judging->getScore(), $problemScorePubl);
                 }
 
-                $problemScorePubl = max($judging->getScore(false), $problemScorePubl);
-                $problemScoreRestricted = max($judging->getScore(true), $problemScoreRestricted);
+                $problemScoreRestricted = max($judging->getScore(), $problemScoreRestricted);
             }
 
 
