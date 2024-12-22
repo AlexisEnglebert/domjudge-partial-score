@@ -332,7 +332,8 @@ class ScoreboardService
         $correctPubl            = false;
         $runtimeJury            = PHP_INT_MAX;
         $runtimePubl            = PHP_INT_MAX;
-        $problemScore           = 0;
+        $problemScorePubl       = 0;
+        $problemScoreRestricted = 0;
 
         foreach ($submissions as $submission) {
             /** @var Judging|ExternalJudgement|null $judging */
@@ -417,14 +418,16 @@ class ScoreboardService
                     $correctPubl = true;
                     $timePubl    = $submitTime;
                 }
-                $problemScore = $judging->getScore();
+                $problemScorePubl = $judging->getScore(false);
+                $problemScoreRestricted = $judging->getScore(true);
             }else if ($judging->getResult() == 'partially-accepted') {
                 $partiallyAcceptedJury = true;
                 if(!$submission->isAfterFreeze()) {
                     $partiallyAcceptedPublic = true;
                 }
 
-                $problemScore = max($judging->getScore(), $problemScore);
+                $problemScorePubl = max($judging->getScore(false), $problemScorePubl);
+                $problemScoreRestricted = max($judging->getScore(true), $problemScoreRestricted);
             }
 
 
@@ -500,14 +503,15 @@ class ScoreboardService
             'isFirstToSolve' => (int)$firstToSolve,
             'isPaPublic'    => (int)$partiallyAcceptedPublic,
             'isPaJury'      => (int)$partiallyAcceptedJury,
-            'problemScore'  => (int)$problemScore,
+            'problemScorePub'  => (int)$problemScorePubl,
+            'problemScoreRestricted'  => (int)$problemScoreRestricted,
         ];
         $this->em->getConnection()->executeQuery('REPLACE INTO scorecache
             (cid, teamid, probid,
              submissions_restricted, pending_restricted, solvetime_restricted, runtime_restricted, is_correct_restricted,
-             submissions_public, pending_public, solvetime_public, runtime_public, is_correct_public, is_first_to_solve, is_partially_accepted_restricted, is_partially_accepted_public, score)
+             submissions_public, pending_public, solvetime_public, runtime_public, is_correct_public, is_first_to_solve, is_partially_accepted_restricted, is_partially_accepted_public, score_public, score_restricted)
             VALUES (:cid, :teamid, :probid, :submissionsRestricted, :pendingRestricted, :solvetimeRestricted, :runtimeRestricted, :isCorrectRestricted,
-            :submissionsPublic, :pendingPublic, :solvetimePublic, :runtimePublic, :isCorrectPublic, :isFirstToSolve, :isPaPublic, :isPaJury, :problemScore)', $params);
+            :submissionsPublic, :pendingPublic, :solvetimePublic, :runtimePublic, :isCorrectPublic, :isFirstToSolve, :isPaPublic, :isPaJury, :problemScorePub, :problemScoreRestricted)', $params);
 
         if ($this->em->getConnection()->fetchOne('SELECT RELEASE_LOCK(:lock)',
                                                     ['lock' => $lockString]) != 1) {
