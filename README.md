@@ -14,7 +14,8 @@ This repo was not designed to be fully modulable or compatible with the default 
 The ranking rule is as follows:
 - First rank by score
 - Then by penalties (if tie)
-- Finally by team name (if tie)
+- Then by the last correct submission time
+- Then by team name.
 
 ## Scoring
 Each testgroups contains a `testdata.yaml`. with the following format

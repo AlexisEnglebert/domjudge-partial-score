@@ -134,6 +134,7 @@ class ScoreboardService
         $restricted = ($jury || $freezeData->showFinal(false));
         $variant    = $restricted ? 'restricted' : 'public';
         $points     = $rankCache ? $rankCache->getPointsRestricted() : 0;
+        $score      = $rankCache ? $rankCache->getScoreRestricted() : 0;
         $totalTime  = 0;
         if ($rankCache) {
             $totalTime  = $contest->getRuntimeAsScoreTiebreaker() ? $rankCache->getTotalruntimeRestricted() : $rankCache->getTotaltimeRestricted();
@@ -150,12 +151,12 @@ class ScoreboardService
             ->andWhere('r.contest = :contest')
             ->andWhere('tc.sortorder = :sortorder')
             ->andWhere('t.enabled = 1')
-            ->andWhere(sprintf('r.points_%s > :points OR '.
-                               '(r.points_%s = :points AND r.total%s_%s < :totaltime)',
+            ->andWhere(sprintf('r.totalscore_%s > :score OR '.
+                               '(r.totalscore_%s = :score AND r.total%s_%s < :totaltime)',
                                $variant, $variant, $timeType, $variant))
             ->setParameter('contest', $contest)
             ->setParameter('sortorder', $sortOrder)
-            ->setParameter('points', $points)
+            ->setParameter('score', $score)
             ->setParameter('totaltime', $totalTime)
             ->getQuery()
             ->getSingleScalarResult();
@@ -165,7 +166,7 @@ class ScoreboardService
         // Resolve ties based on latest correctness points, only necessary
         // when we actually solved at least one problem, so this list should
         // usually be short.
-        if ($points > 0) {
+        if ($score > 0) {
             /** @var RankCache[] $tied */
             $tied = $this->em->createQueryBuilder()
                 ->from(RankCache::class, 'r')
@@ -175,11 +176,11 @@ class ScoreboardService
                 ->andWhere('r.contest = :contest')
                 ->andWhere('tc.sortorder = :sortorder')
                 ->andWhere('t.enabled = 1')
-                ->andWhere(sprintf('r.points_%s = :points AND r.total%s_%s = :totaltime',
+                ->andWhere(sprintf('r.totalscore_%s = :score AND r.total%s_%s = :totaltime',
                                    $variant, $timeType, $variant))
                 ->setParameter('contest', $contest)
                 ->setParameter('sortorder', $sortOrder)
-                ->setParameter('points', $points)
+                ->setParameter('score', $score)
                 ->setParameter('totaltime', $totalTime)
                 ->getQuery()
                 ->getResult();
@@ -239,6 +240,8 @@ class ScoreboardService
         return $rank;
     }
 
+    // TODO ADD PARTIAL SCORING SUBMISSION TIME TO THE TOTAL PENALTIES BECAUSE ATM IT IS NOT THE CASE
+    // TODO AND ALSO FIX THE SIGNLE PLAYER RANK WHICH IS F up, (HOW CAN I UPDATE THE RANK CACHE AND WHEEEEERE)
     /**
      * Scoreboard calculation // TODO CHANGE THIS FOR PARTIAL SCORING
      *
